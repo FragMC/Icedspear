@@ -1,0 +1,22 @@
+# IcedSpear Configuration
+
+# Maximum number of players allowed per map instance
+max-players: 10
+
+# Delay in seconds before removing empty private map worlds
+# Set to 0 for instant removal (not recommended)
+cleanup-delay-seconds: 15
+
+# URL to fetch map data JSON from
+# The JSON should contain map definitions with schematics
+# Format: { "mapname": { "schematic": "schematic_name", ... }, ... }
+map-data-url: "https://example.com/maps.json"
+
+# Maps blocked for all players (use /icedspear block * <mapname>)
+# Players with icedspear.bypass permission can still join
+# Format: globally-blocked-maps.<mapname>: true
+globally-blocked-maps: {}
+
+# Blocked maps per player (managed by commands)
+# Format: blocked-maps.<player-uuid>: [mapname1, mapname2]
+blocked-maps: {}

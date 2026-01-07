@@ -1,0 +1,170 @@
+package com.stufy.fragmc.icedspear.commands;
+
+import com.stufy.fragmc.icedspear.managers.PartyManager;
+import com.stufy.fragmc.icedspear.models.Party;
+import org.bukkit.ChatColor;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabCompleter;
+import org.bukkit.entity.Player;
+import java.util.*;
+
+public class PartyCommand implements CommandExecutor, TabCompleter {
+    private final PartyManager partyManager;
+
+    public PartyCommand(PartyManager partyManager) {
+        this.partyManager = partyManager;
+    }
+
+    @Override
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (!(sender instanceof Player)) {
+            sender.sendMessage(ChatColor.RED + "Only players can use this command!");
+            return true;
+        }
+
+        Player player = (Player) sender;
+
+        if (args.length == 0) {
+            sendUsage(player);
+            return true;
+        }
+
+        switch (args[0].toLowerCase()) {
+            case "create":
+                handleCreateParty(player);
+                break;
+
+            case "join":
+                if (args.length < 2) {
+                    player.sendMessage(ChatColor.RED + "Usage: /party join <code>");
+                    return true;
+                }
+                handleJoinParty(player, args[1]);
+                break;
+
+            case "leave":
+                handleLeaveParty(player);
+                break;
+
+            case "map":
+                if (args.length < 2) {
+                    player.sendMessage(ChatColor.RED + "Usage: /party map <mapname>");
+                    return true;
+                }
+                handlePartyMap(player, args[1]);
+                break;
+
+            case "list":
+                handleListParty(player);
+                break;
+
+            default:
+                sendUsage(player);
+                break;
+        }
+
+        return true;
+    }
+
+    private void handleCreateParty(Player player) {
+        String code = partyManager.createParty(player);
+
+        if (code == null) {
+            player.sendMessage(ChatColor.RED + "You're already in a party!");
+            return;
+        }
+
+        player.sendMessage(ChatColor.GREEN + "Party created!");
+        player.sendMessage(ChatColor.GOLD + "Party code: " + ChatColor.YELLOW + code);
+        player.sendMessage(ChatColor.GRAY + "Share this code with friends to invite them!");
+    }
+
+    private void handleJoinParty(Player player, String code) {
+        boolean success = partyManager.joinParty(player, code);
+
+        if (!success) {
+            player.sendMessage(ChatColor.RED + "Invalid party code or you're already in a party!");
+            return;
+        }
+
+        player.sendMessage(ChatColor.GREEN + "You joined the party!");
+    }
+
+    private void handleLeaveParty(Player player) {
+        String partyCode = partyManager.getPlayerParty(player.getUniqueId());
+
+        if (partyCode == null) {
+            player.sendMessage(ChatColor.RED + "You're not in a party!");
+            return;
+        }
+
+        partyManager.leaveParty(player);
+        player.sendMessage(ChatColor.YELLOW + "You left the party.");
+    }
+
+    private void handlePartyMap(Player player, String mapName) {
+        String partyCode = partyManager.getPlayerParty(player.getUniqueId());
+
+        if (partyCode == null) {
+            player.sendMessage(ChatColor.RED + "You're not in a party!");
+            return;
+        }
+
+        Party party = partyManager.getParty(partyCode);
+
+        if (!party.getLeader().equals(player.getUniqueId())) {
+            player.sendMessage(ChatColor.RED + "Only the party leader can start maps!");
+            return;
+        }
+
+        boolean success = partyManager.startPartyMap(player, mapName);
+
+        if (success) {
+            player.sendMessage(ChatColor.GREEN + "Starting party map: " + mapName);
+            player.sendMessage(ChatColor.YELLOW + "All party members will be teleported shortly...");
+        } else {
+            player.sendMessage(ChatColor.RED + "Failed to start party map!");
+        }
+    }
+
+    private void handleListParty(Player player) {
+        String partyCode = partyManager.getPlayerParty(player.getUniqueId());
+
+        if (partyCode == null) {
+            player.sendMessage(ChatColor.RED + "You're not in a party!");
+            return;
+        }
+
+        Party party = partyManager.getParty(partyCode);
+
+        player.sendMessage(ChatColor.GOLD + "=== Party Members ===");
+        player.sendMessage(ChatColor.YELLOW + "Party Code: " + partyCode);
+
+        for (UUID memberId : party.getMembers()) {
+            Player member = player.getServer().getPlayer(memberId);
+            if (member != null) {
+                String prefix = party.getLeader().equals(memberId) ? ChatColor.GOLD + "★ " : ChatColor.GRAY + "• ";
+                player.sendMessage(prefix + ChatColor.WHITE + member.getName());
+            }
+        }
+    }
+
+    private void sendUsage(Player player) {
+        player.sendMessage(ChatColor.GOLD + "=== IcedSpear Party Commands ===");
+        player.sendMessage(ChatColor.YELLOW + "/party create" + ChatColor.GRAY + " - Create a new party");
+        player.sendMessage(ChatColor.YELLOW + "/party join <code>" + ChatColor.GRAY + " - Join a party");
+        player.sendMessage(ChatColor.YELLOW + "/party leave" + ChatColor.GRAY + " - Leave your party");
+        player.sendMessage(ChatColor.YELLOW + "/party map <mapname>" + ChatColor.GRAY + " - Start a party map (leader only)");
+        player.sendMessage(ChatColor.YELLOW + "/party list" + ChatColor.GRAY + " - List party members");
+    }
+
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (args.length == 1) {
+            return Arrays.asList("create", "join", "leave", "map", "list");
+        }
+        return new ArrayList<>();
+    }
+}

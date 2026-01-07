@@ -1,0 +1,65 @@
+name: IcedSpear
+version: 1.0.3
+main: com.stufy.fragmc.icedspear.IcedSpear
+api-version: 1.21
+author: Stufy
+description: Custom map lobbies plugin with party system
+depend: [WorldEdit]
+
+# Paper-specific optimizations
+folia-supported: false
+load: POSTWORLD
+
+commands:
+  map:
+    description: Map management commands
+    usage: /<command> <public|private|join|leave> [args]
+    permission: icedspear.map
+
+  party:
+    description: Party management commands
+    usage: /<command> <create|join|leave|map|list> [args]
+    permission: icedspear.party
+
+  friend:
+    description: Friend management commands
+    usage: /<command> <add|accept|remove|list|requests> [args]
+    permission: icedspear.friend
+
+  icedspear:
+    description: Admin commands
+    usage: /<command> <import|list|reload|config|block|unblock> [args]
+    permission: icedspear.admin
+
+permissions:
+  icedspear.admin:
+    description: Access to admin commands
+    default: op
+
+  icedspear.bypass:
+    description: Bypass all map restrictions (globally blocked, player blocked, permissions)
+    default: op
+
+  icedspear.map:
+    description: Access to map commands
+    default: true
+
+  icedspear.map.public:
+    description: Create public maps
+    default: true
+
+  icedspear.map.private:
+    description: Create private maps
+    default: true
+
+  icedspear.map.*:
+    description: Access to all maps
+    default: op
+
+  icedspear.party:
+    description: Access to party commands
+    default: true
+
+  icedspear.friend:
+    description: Access to friend commands
+    default: true
