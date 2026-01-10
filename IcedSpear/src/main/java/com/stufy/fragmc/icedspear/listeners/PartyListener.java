@@ -4,6 +4,7 @@ import com.stufy.fragmc.icedspear.managers.PartyManager;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
 public class PartyListener implements Listener {
@@ -20,6 +21,14 @@ public class PartyListener implements Listener {
 
         if (partyCode != null) {
             partyManager.leaveParty(player);
+        }
+    }
+
+    @EventHandler
+    public void onPlayerChat(AsyncPlayerChatEvent event) {
+        if (partyManager.isPartyChatEnabled(event.getPlayer())) {
+            event.setCancelled(true);
+            partyManager.sendPartyChat(event.getPlayer(), event.getMessage());
         }
     }
 }

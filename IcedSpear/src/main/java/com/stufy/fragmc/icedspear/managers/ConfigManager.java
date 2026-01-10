@@ -93,4 +93,30 @@ public class ConfigManager {
         plugin.getConfig().set("map-data-url", url);
         plugin.saveConfig();
     }
+
+    public org.bukkit.GameMode getWorldGamemode(String worldName) {
+        String path = "world-settings." + worldName + ".gamemode";
+        if (plugin.getConfig().contains(path)) {
+            String gm = plugin.getConfig().getString(path);
+            try {
+                return org.bukkit.GameMode.valueOf(gm.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                // ignore
+            }
+        }
+        // Fallback to default
+        String defaultGm = plugin.getConfig().getString("world-settings.default.gamemode", "ADVENTURE");
+        try {
+            return org.bukkit.GameMode.valueOf(defaultGm.toUpperCase());
+        } catch (Exception e) {
+            return org.bukkit.GameMode.ADVENTURE;
+        }
+    }
+
+    public List<String> getWorldCommands(String worldName) {
+        if (plugin.getConfig().contains("world-settings." + worldName + ".commands")) {
+            return plugin.getConfig().getStringList("world-settings." + worldName + ".commands");
+        }
+        return plugin.getConfig().getStringList("world-settings.default.commands");
+    }
 }

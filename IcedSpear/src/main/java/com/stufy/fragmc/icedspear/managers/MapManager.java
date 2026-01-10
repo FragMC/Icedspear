@@ -25,6 +25,14 @@ public class MapManager {
         this.playerToInstance = new ConcurrentHashMap<>();
     }
 
+    public Map<String, MapInstance> getActiveInstances() {
+        return Collections.unmodifiableMap(activeInstances);
+    }
+
+    public String getPlayerMapId(UUID playerUuid) {
+        return playerToInstance.get(playerUuid);
+    }
+
     public String createPublicMap(String mapName) {
         String instanceId = "PUBLIC_" + mapName;
 
@@ -155,8 +163,16 @@ public class MapManager {
                 } else {
                     plugin.getLogger().info(
                             "Map world " + instance.getInstanceId() + " already exists. Skipping schematic paste.");
-                    // Still need to scan for gold block to set spawn
-                    scanForGoldBlock(instance, new Location(world, 0, 100, 0));
+
+                    String schematicName = schematicManager.getSchematicForMap(instance.getMapName());
+                    Location pasteLocation = new Location(world, 0, 100, 0);
+                    Location spawnLocation = schematicManager.getSpawnLocation(schematicName, pasteLocation);
+
+                    if (spawnLocation == null) {
+                        spawnLocation = pasteLocation.clone().add(0, 1, 0);
+                    }
+
+                    finalizeMap(instance, spawnLocation);
                 }
             }
         });
@@ -175,133 +191,71 @@ public class MapManager {
 
         Location pasteLocation = new Location(instance.getWorld(), 0, 100, 0);
 
-        boolean success = schematicManager.pasteSchematic(schematicName, pasteLocation);
+        Location spawnLocation = schematicManager.pasteSchematic(schematicName, pasteLocation);
 
-        if (success) {
-            plugin.getLogger().info("Schematic pasted successfully, scanning for gold block...");
-            scanForGoldBlock(instance, pasteLocation);
+        if (spawnLocation != null) {
+            plugin.getLogger().info("Schematic pasted successfully.");
+            finalizeMap(instance, spawnLocation);
         } else {
             plugin.getLogger().severe("Failed to paste schematic for map: " + instance.getMapName());
             instance.setState(MapState.ERROR);
         }
     }
 
-    private void scanForGoldBlock(MapInstance instance, Location pasteLocation) {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            Location goldBlockLocation = null;
-            World world = instance.getWorld();
+    private void finalizeMap(MapInstance instance, Location spawnLocation) {
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            instance.setSpawnLocation(spawnLocation);
+            plugin.getLogger().info("Map ready! Spawn set at: X=" + spawnLocation.getBlockX() +
+                    " Y=" + spawnLocation.getBlockY() +
+                    " Z=" + spawnLocation.getBlockZ());
+            instance.setState(MapState.WAITING);
 
-            String schematicName = schematicManager.getSchematicForMap(instance.getMapName());
-            org.bukkit.util.BoundingBox bounds = schematicManager.getSchematicBounds(schematicName, pasteLocation);
+            // Teleport waiting players
+            for (UUID playerId : instance.getWaitingPlayers()) {
+                Player player = Bukkit.getPlayer(playerId);
+                if (player != null && player.isOnline()) {
+                    // Re-check permissions and bans just in case
+                    if (!configManager.canPlayerJoinMap(player, instance.getMapName())) {
+                        player.sendMessage(ChatColor.RED + "You don't have permission to join this map!");
+                        continue;
+                    }
 
-            if (bounds != null) {
-                plugin.getLogger().info("Scanning schematic bounds for gold block: " + bounds.toString());
+                    // Check full
+                    if (instance.getPlayers().size() >= configManager.getMaxPlayers()) {
+                        player.sendMessage(ChatColor.RED + "Map is full!");
+                        continue;
+                    }
 
-                int minX = (int) bounds.getMinX();
-                int maxX = (int) bounds.getMaxX();
-                int minY = (int) Math.max(world.getMinHeight(), bounds.getMinY());
-                int maxY = (int) Math.min(world.getMaxHeight(), bounds.getMaxY());
-                int minZ = (int) bounds.getMinZ();
-                int maxZ = (int) bounds.getMaxZ();
+                    instance.addPlayer(playerId);
+                    playerToInstance.put(playerId, instance.getInstanceId());
 
-                outerLoop: for (int x = minX; x <= maxX; x++) {
-                    for (int z = minZ; z <= maxZ; z++) {
-                        for (int y = minY; y <= maxY; y++) {
-                            Location checkLoc = new Location(world, x, y, z);
-                            Block block = world.getBlockAt(checkLoc);
-
-                            if (block.getType() == Material.GOLD_BLOCK) {
-                                goldBlockLocation = checkLoc.add(0.5, 1, 0.5);
-                                plugin.getLogger().info("Found gold block at: X=" + goldBlockLocation.getBlockX() +
-                                        " Y=" + goldBlockLocation.getBlockY() +
-                                        " Z=" + goldBlockLocation.getBlockZ());
-                                break outerLoop;
+                    // Teleport
+                    try {
+                        player.teleportAsync(spawnLocation).thenAccept(success -> {
+                            if (success) {
+                                player.setGameMode(GameMode.ADVENTURE);
+                                player.sendMessage(ChatColor.GREEN + "Map is ready! Welcome to "
+                                        + instance.getMapName() + "!");
                             }
-                        }
+                        });
+                    } catch (NoSuchMethodError e) {
+                        player.teleport(spawnLocation);
+                        player.setGameMode(GameMode.ADVENTURE);
+                        player.sendMessage(
+                                ChatColor.GREEN + "Map is ready! Welcome to " + instance.getMapName() + "!");
                     }
                 }
+            }
+            instance.clearWaitingPlayers();
+
+            if (!instance.getPlayers().isEmpty()) {
+                instance.setState(MapState.RUNNING);
             } else {
-                plugin.getLogger().warning("Could not determine schematic bounds. Scanning default area...");
-                // Fallback to default scan
-                int minY = world.getMinHeight();
-                int maxY = world.getMaxHeight();
-
-                outerLoop: for (int x = -50; x <= 50; x++) {
-                    for (int z = -50; z <= 50; z++) {
-                        for (int y = minY; y < maxY; y++) {
-                            Location checkLoc = new Location(world, x, y, z);
-                            Block block = world.getBlockAt(checkLoc);
-
-                            if (block.getType() == Material.GOLD_BLOCK) {
-                                goldBlockLocation = checkLoc.add(0.5, 1, 0.5);
-                                break outerLoop;
-                            }
-                        }
-                    }
-                }
+                // No one joined (everyone quit while waiting), destroy map
+                plugin.getLogger().info("Map " + instance.getInstanceId()
+                        + " creation finished but no players joined. Destroying.");
+                destroyMap(instance.getInstanceId());
             }
-
-            if (goldBlockLocation == null) {
-                plugin.getLogger().warning("No gold block found in map! Using default spawn location.");
-            }
-
-            Location finalGoldLocation = goldBlockLocation != null ? goldBlockLocation
-                    : pasteLocation.clone().add(0, 1, 0);
-
-            Bukkit.getScheduler().runTask(plugin, () -> {
-                instance.setSpawnLocation(finalGoldLocation);
-                plugin.getLogger().info("Map ready! Spawn set at: X=" + finalGoldLocation.getBlockX() +
-                        " Y=" + finalGoldLocation.getBlockY() +
-                        " Z=" + finalGoldLocation.getBlockZ());
-                instance.setState(MapState.WAITING);
-
-                // Teleport waiting players
-                for (UUID playerId : instance.getWaitingPlayers()) {
-                    Player player = Bukkit.getPlayer(playerId);
-                    if (player != null && player.isOnline()) {
-                        // Re-check permissions and bans just in case
-                        if (!configManager.canPlayerJoinMap(player, instance.getMapName())) {
-                            player.sendMessage(ChatColor.RED + "You don't have permission to join this map!");
-                            continue;
-                        }
-
-                        // Check full
-                        if (instance.getPlayers().size() >= configManager.getMaxPlayers()) {
-                            player.sendMessage(ChatColor.RED + "Map is full!");
-                            continue;
-                        }
-
-                        instance.addPlayer(playerId);
-                        playerToInstance.put(playerId, instance.getInstanceId());
-
-                        // Teleport
-                        try {
-                            player.teleportAsync(finalGoldLocation).thenAccept(success -> {
-                                if (success) {
-                                    player.setGameMode(GameMode.ADVENTURE);
-                                    player.sendMessage(ChatColor.GREEN + "Map is ready! Welcome to "
-                                            + instance.getMapName() + "!");
-                                }
-                            });
-                        } catch (NoSuchMethodError e) {
-                            player.teleport(finalGoldLocation);
-                            player.setGameMode(GameMode.ADVENTURE);
-                            player.sendMessage(
-                                    ChatColor.GREEN + "Map is ready! Welcome to " + instance.getMapName() + "!");
-                        }
-                    }
-                }
-                instance.clearWaitingPlayers();
-
-                if (!instance.getPlayers().isEmpty()) {
-                    instance.setState(MapState.RUNNING);
-                } else {
-                    // No one joined (everyone quit while waiting), destroy map
-                    plugin.getLogger().info("Map " + instance.getInstanceId()
-                            + " creation finished but no players joined. Destroying.");
-                    destroyMap(instance.getInstanceId());
-                }
-            });
         });
     }
 
@@ -488,14 +442,6 @@ public class MapManager {
 
     public MapInstance getInstance(String instanceId) {
         return activeInstances.get(instanceId);
-    }
-
-    public String getPlayerInstance(UUID playerId) {
-        return playerToInstance.get(playerId);
-    }
-
-    public Map<String, MapInstance> getActiveInstances() {
-        return new HashMap<>(activeInstances);
     }
 
     public void cleanup() {

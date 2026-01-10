@@ -13,6 +13,7 @@ import com.sk89q.worldedit.function.operation.Operation;
 import com.sk89q.worldedit.function.operation.Operations;
 import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldedit.session.ClipboardHolder;
+import com.sk89q.worldedit.world.block.BlockTypes;
 import com.stufy.fragmc.icedspear.IcedSpear;
 import org.bukkit.Location;
 
@@ -116,7 +117,55 @@ public class SchematicManager {
         }
     }
 
-    public boolean pasteSchematic(String schematicName, Location location) {
+    public java.util.Set<String> getAvailableMaps() {
+        return java.util.Collections.unmodifiableSet(mapToSchematic.keySet());
+    }
+
+    public String getSchematicForMap(String mapName) {
+        return mapToSchematic.get(mapName);
+    }
+
+    public JsonObject getMapData(String mapName) {
+        if (mapData != null && mapData.has(mapName)) {
+            return mapData.getAsJsonObject(mapName);
+        }
+        return null;
+    }
+
+    public Location getSpawnLocation(String schematicName, Location pasteOrigin) {
+        File schematicFile = new File(schematicsFolder, schematicName + ".schem");
+
+        if (!schematicFile.exists()) {
+            schematicFile = new File(schematicsFolder, schematicName + ".schematic");
+        }
+
+        if (!schematicFile.exists()) {
+            return null;
+        }
+
+        try {
+            ClipboardFormat format = ClipboardFormats.findByFile(schematicFile);
+            if (format == null)
+                return null;
+
+            try (ClipboardReader reader = format.getReader(new FileInputStream(schematicFile))) {
+                Clipboard clipboard = reader.read();
+
+                for (BlockVector3 vec : clipboard.getRegion()) {
+                    if (clipboard.getBlock(vec).getBlockType() == BlockTypes.GOLD_BLOCK) {
+                        BlockVector3 origin = clipboard.getOrigin();
+                        BlockVector3 offset = vec.subtract(origin);
+                        return pasteOrigin.clone().add(offset.x(), offset.y() + 1, offset.z());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return pasteOrigin; // Fallback
+    }
+
+    public Location pasteSchematic(String schematicName, Location location) {
         File schematicFile = new File(schematicsFolder, schematicName + ".schem");
 
         if (!schematicFile.exists()) {
@@ -139,7 +188,7 @@ public class SchematicManager {
                 plugin.getLogger().warning("Schematics folder is empty!");
             }
 
-            return false;
+            return null;
         }
 
         plugin.getLogger().info("Found schematic file: " + schematicFile.getName());
@@ -149,7 +198,7 @@ public class SchematicManager {
 
             if (format == null) {
                 plugin.getLogger().warning("Unknown schematic format: " + schematicName);
-                return false;
+                return null;
             }
 
             plugin.getLogger().info("Using format: " + format.getName());
@@ -166,6 +215,15 @@ public class SchematicManager {
 
                 plugin.getLogger().info("Clipboard loaded, dimensions: " +
                         width + "x" + height + "x" + length);
+
+                // Scan for gold block in clipboard
+                BlockVector3 goldBlockPos = null;
+                for (BlockVector3 vec : clipboard.getRegion()) {
+                    if (clipboard.getBlock(vec).getBlockType() == BlockTypes.GOLD_BLOCK) {
+                        goldBlockPos = vec;
+                        break;
+                    }
+                }
 
                 com.sk89q.worldedit.world.World weWorld = BukkitAdapter.adapt(location.getWorld());
 
@@ -189,13 +247,21 @@ public class SchematicManager {
                 // Give the world a moment to process the paste
                 Thread.sleep(100);
 
-                return true;
+                if (goldBlockPos != null) {
+                    // Calculate relative offset from origin
+                    BlockVector3 origin = clipboard.getOrigin();
+                    BlockVector3 offset = goldBlockPos.subtract(origin);
+                    return location.clone().add(offset.x(), offset.y() + 1, offset.z()); // +1 for spawn on top
+                } else {
+                    plugin.getLogger().warning("No Gold Block found in schematic: " + schematicName);
+                    return location; // Return paste location as fallback
+                }
             }
 
         } catch (Exception e) {
             plugin.getLogger().severe("Failed to paste schematic: " + e.getMessage());
             e.printStackTrace();
-            return false;
+            return null;
         }
     }
 
@@ -281,10 +347,6 @@ public class SchematicManager {
             plugin.getLogger().severe("Failed to import schematic: " + e.getMessage());
             return false;
         }
-    }
-
-    public String getSchematicForMap(String mapName) {
-        return mapToSchematic.get(mapName);
     }
 
     public JsonObject getMapData() {

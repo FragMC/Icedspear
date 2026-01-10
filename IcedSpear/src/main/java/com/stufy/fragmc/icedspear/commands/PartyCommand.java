@@ -2,6 +2,7 @@ package com.stufy.fragmc.icedspear.commands;
 
 import com.stufy.fragmc.icedspear.managers.PartyManager;
 import com.stufy.fragmc.icedspear.models.Party;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -66,6 +67,61 @@ public class PartyCommand implements CommandExecutor, TabCompleter {
                     return true;
                 }
                 handleKickParty(player, args[1]);
+                break;
+
+            case "invite":
+                if (args.length < 2) {
+                    player.sendMessage(ChatColor.RED + "Usage: /party invite <player>");
+                    return true;
+                }
+                Player target = Bukkit.getPlayer(args[1]);
+                if (target == null) {
+                    player.sendMessage(ChatColor.RED + "Player not found or offline.");
+                    return true;
+                }
+                partyManager.invitePlayer(player, target);
+                break;
+
+            case "accept":
+                if (args.length < 2) {
+                    player.sendMessage(ChatColor.RED + "Usage: /party accept <player>");
+                    return true;
+                }
+                partyManager.acceptInvite(player, args[1]);
+                break;
+
+            case "acceptrequest":
+                if (args.length < 2) {
+                    player.sendMessage(ChatColor.RED + "Usage: /party acceptrequest <player>");
+                    return true;
+                }
+                partyManager.acceptJoinRequest(player, args[1]);
+                break;
+
+            case "request":
+            case "requestjoin":
+                if (args.length < 2) {
+                    player.sendMessage(ChatColor.RED + "Usage: /party request <player>");
+                    return true;
+                }
+                Player requestTarget = Bukkit.getPlayer(args[1]);
+                if (requestTarget == null) {
+                    player.sendMessage(ChatColor.RED + "Player not found or offline.");
+                    return true;
+                }
+                partyManager.requestJoin(player, requestTarget);
+                break;
+
+            case "chat":
+                if (args.length < 2) {
+                    partyManager.togglePartyChat(player);
+                } else {
+                    StringBuilder msg = new StringBuilder();
+                    for (int i = 1; i < args.length; i++) {
+                        msg.append(args[i]).append(" ");
+                    }
+                    partyManager.sendPartyChat(player, msg.toString());
+                }
                 break;
 
             default:
@@ -180,12 +236,21 @@ public class PartyCommand implements CommandExecutor, TabCompleter {
         player.sendMessage(
                 ChatColor.YELLOW + "/party kick <player>" + ChatColor.GRAY + " - Kick a player (leader only)");
         player.sendMessage(ChatColor.YELLOW + "/party list" + ChatColor.GRAY + " - List party members");
+        player.sendMessage(ChatColor.YELLOW + "/party invite <player>" + ChatColor.GRAY + " - Invite a friend");
+        player.sendMessage(ChatColor.YELLOW + "/party accept <player>" + ChatColor.GRAY + " - Accept an invite");
+        player.sendMessage(
+                ChatColor.YELLOW + "/party request <player>" + ChatColor.GRAY + " - Request to join a friend's party");
+        player.sendMessage(
+                ChatColor.YELLOW + "/party acceptrequest <player>" + ChatColor.GRAY + " - Accept a join request");
+        player.sendMessage(
+                ChatColor.YELLOW + "/party chat [message]" + ChatColor.GRAY + " - Toggle or send party chat");
     }
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            return Arrays.asList("create", "join", "leave", "map", "kick", "list");
+            return Arrays.asList("create", "join", "leave", "map", "kick", "list", "invite", "accept", "request",
+                    "acceptrequest", "chat");
         }
 
         if (args.length == 2) {
@@ -208,6 +273,9 @@ public class PartyCommand implements CommandExecutor, TabCompleter {
                     }
                 }
                 return new ArrayList<>();
+            }
+            if (Arrays.asList("invite", "accept", "request", "acceptrequest").contains(args[0].toLowerCase())) {
+                return null; // Return null to show online players
             }
         }
 

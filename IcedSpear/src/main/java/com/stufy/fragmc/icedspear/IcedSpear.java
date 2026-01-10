@@ -1,5 +1,6 @@
 package com.stufy.fragmc.icedspear;
 
+import com.stufy.fragmc.icedspear.api.IcedSpearAPI;
 import com.stufy.fragmc.icedspear.commands.*;
 import com.stufy.fragmc.icedspear.managers.*;
 import com.stufy.fragmc.icedspear.listeners.*;
@@ -21,8 +22,11 @@ public class IcedSpear extends JavaPlugin {
         configManager = new ConfigManager(this);
         schematicManager = new SchematicManager(this);
         mapManager = new MapManager(this, schematicManager, configManager);
-        partyManager = new PartyManager(this, mapManager, configManager);
         friendManager = new FriendManager(this);
+        partyManager = new PartyManager(this, mapManager, configManager, friendManager);
+
+        // Initialize API
+        IcedSpearAPI.initialize(this);
 
         // Register commands
         getCommand("map").setExecutor(new MapCommand(mapManager, partyManager));
@@ -33,6 +37,7 @@ public class IcedSpear extends JavaPlugin {
         // Register listeners
         getServer().getPluginManager().registerEvents(new MapListener(mapManager), this);
         getServer().getPluginManager().registerEvents(new PartyListener(partyManager), this);
+        getServer().getPluginManager().registerEvents(new WorldListener(configManager), this);
 
         getLogger().info("IcedSpear has been enabled!");
     }
