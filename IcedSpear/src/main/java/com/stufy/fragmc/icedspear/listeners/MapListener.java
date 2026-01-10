@@ -26,7 +26,7 @@ public class MapListener implements Listener {
         }
 
         Player player = event.getPlayer();
-        String instanceId = mapManager.getPlayerMapId(player.getUniqueId());
+        String instanceId = mapManager.getPlayerInstance(player.getUniqueId());
 
         if (instanceId == null) {
             return;
@@ -49,7 +49,7 @@ public class MapListener implements Listener {
     @EventHandler(priority = EventPriority.HIGH)
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
-        String instanceId = mapManager.getPlayerMapId(player.getUniqueId());
+        String instanceId = mapManager.getPlayerInstance(player.getUniqueId());
 
         if (instanceId != null) {
             mapManager.leaveMap(player);

@@ -20,15 +20,3 @@ globally-blocked-maps: {}
 # Blocked maps per player (managed by commands)
 # Format: blocked-maps.<player-uuid>: [mapname1, mapname2]
 blocked-maps: {}
-
-# World Settings
-# Configure default gamemode and commands to run when joining specific worlds
-# 'default' applies to all worlds unless overridden
-# Commands are run as console. Use %player% for player name.
-world-settings:
-  default:
-    gamemode: ADVENTURE
-    commands: []
-  lobby:
-    gamemode: ADVENTURE
-    commands: []
