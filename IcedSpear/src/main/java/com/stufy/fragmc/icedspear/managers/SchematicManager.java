@@ -22,6 +22,8 @@ import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.bukkit.util.BoundingBox;
+
 public class SchematicManager {
     private final IcedSpear plugin;
     private final File schematicsFolder;
@@ -197,6 +199,43 @@ public class SchematicManager {
         }
     }
 
+    public org.bukkit.util.BoundingBox getSchematicBounds(String schematicName, Location pasteLocation) {
+        File schematicFile = new File(schematicsFolder, schematicName + ".schem");
+        if (!schematicFile.exists()) {
+            schematicFile = new File(schematicsFolder, schematicName + ".schematic");
+        }
+
+        if (!schematicFile.exists()) {
+            return null;
+        }
+
+        ClipboardFormat format = ClipboardFormats.findByFile(schematicFile);
+        if (format == null) {
+            return null;
+        }
+
+        try (ClipboardReader reader = format.getReader(new FileInputStream(schematicFile))) {
+            Clipboard clipboard = reader.read();
+
+            BlockVector3 origin = clipboard.getOrigin();
+            com.sk89q.worldedit.regions.Region region = clipboard.getRegion();
+            BlockVector3 min = region.getMinimumPoint();
+            BlockVector3 max = region.getMaximumPoint();
+
+            BlockVector3 offset = BlockVector3.at(pasteLocation.getX(), pasteLocation.getY(), pasteLocation.getZ())
+                    .subtract(origin);
+            BlockVector3 pastedMin = min.add(offset);
+            BlockVector3 pastedMax = max.add(offset);
+
+            return new org.bukkit.util.BoundingBox(pastedMin.x(), pastedMin.y(), pastedMin.z(), pastedMax.x(),
+                    pastedMax.y(), pastedMax.z());
+        } catch (Exception e) {
+            plugin.getLogger().severe("Failed to get schematic bounds: " + e.getMessage());
+            e.printStackTrace();
+            return null;
+        }
+    }
+
     public boolean removeSchematic(String schematicName) {
         File schematicFile = new File(schematicsFolder, schematicName + ".schem");
 
@@ -232,7 +271,8 @@ public class SchematicManager {
             return false;
         }
 
-        File targetFile = new File(schematicsFolder, targetName + sourceFile.getName().substring(worldEditName.length()));
+        File targetFile = new File(schematicsFolder,
+                targetName + sourceFile.getName().substring(worldEditName.length()));
 
         try {
             Files.copy(sourceFile.toPath(), targetFile.toPath());

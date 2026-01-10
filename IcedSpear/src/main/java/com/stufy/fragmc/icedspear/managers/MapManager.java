@@ -74,6 +74,9 @@ public class MapManager {
 
         // Create void world
         Bukkit.getScheduler().runTask(plugin, () -> {
+            // Check if world folder already exists (persistence check)
+            boolean worldExists = new java.io.File(Bukkit.getWorldContainer(), instance.getInstanceId()).exists();
+
             WorldCreator worldCreator = new WorldCreator(instance.getInstanceId());
             worldCreator.environment(World.Environment.NORMAL);
             worldCreator.type(WorldType.FLAT);
@@ -81,19 +84,19 @@ public class MapManager {
             worldCreator.generator(new org.bukkit.generator.ChunkGenerator() {
                 @Override
                 public void generateNoise(org.bukkit.generator.WorldInfo worldInfo,
-                                          Random random,
-                                          int chunkX,
-                                          int chunkZ,
-                                          org.bukkit.generator.ChunkGenerator.ChunkData chunkData) {
+                        Random random,
+                        int chunkX,
+                        int chunkZ,
+                        org.bukkit.generator.ChunkGenerator.ChunkData chunkData) {
                     // Generate nothing - completely void
                 }
 
                 @Override
                 public void generateSurface(org.bukkit.generator.WorldInfo worldInfo,
-                                            Random random,
-                                            int chunkX,
-                                            int chunkZ,
-                                            org.bukkit.generator.ChunkGenerator.ChunkData chunkData) {
+                        Random random,
+                        int chunkX,
+                        int chunkZ,
+                        org.bukkit.generator.ChunkGenerator.ChunkData chunkData) {
                     // Generate nothing - completely void
                 }
 
@@ -146,8 +149,15 @@ public class MapManager {
 
                 instance.setWorld(world);
 
-                // Paste schematic
-                pasteSchematic(instance);
+                // Only paste schematic if the world didn't exist before
+                if (!worldExists) {
+                    pasteSchematic(instance);
+                } else {
+                    plugin.getLogger().info(
+                            "Map world " + instance.getInstanceId() + " already exists. Skipping schematic paste.");
+                    // Still need to scan for gold block to set spawn
+                    scanForGoldBlock(instance, new Location(world, 0, 100, 0));
+                }
             }
         });
     }
@@ -181,26 +191,51 @@ public class MapManager {
             Location goldBlockLocation = null;
             World world = instance.getWorld();
 
-            plugin.getLogger().info("Scanning entire world for gold block...");
+            String schematicName = schematicManager.getSchematicForMap(instance.getMapName());
+            org.bukkit.util.BoundingBox bounds = schematicManager.getSchematicBounds(schematicName, pasteLocation);
 
-            // Get world height limits
-            int minY = world.getMinHeight();
-            int maxY = world.getMaxHeight();
+            if (bounds != null) {
+                plugin.getLogger().info("Scanning schematic bounds for gold block: " + bounds.toString());
 
-            // Scan a large area - 500x500 blocks around spawn
-            outerLoop:
-            for (int x = -250; x <= 250; x++) {
-                for (int z = -250; z <= 250; z++) {
-                    for (int y = minY; y < maxY; y++) {
-                        Location checkLoc = new Location(world, x, y, z);
-                        Block block = world.getBlockAt(checkLoc);
+                int minX = (int) bounds.getMinX();
+                int maxX = (int) bounds.getMaxX();
+                int minY = (int) Math.max(world.getMinHeight(), bounds.getMinY());
+                int maxY = (int) Math.min(world.getMaxHeight(), bounds.getMaxY());
+                int minZ = (int) bounds.getMinZ();
+                int maxZ = (int) bounds.getMaxZ();
 
-                        if (block.getType() == Material.GOLD_BLOCK) {
-                            goldBlockLocation = checkLoc.add(0.5, 1, 0.5);
-                            plugin.getLogger().info("Found gold block at: X=" + goldBlockLocation.getBlockX() +
-                                    " Y=" + goldBlockLocation.getBlockY() +
-                                    " Z=" + goldBlockLocation.getBlockZ());
-                            break outerLoop;
+                outerLoop: for (int x = minX; x <= maxX; x++) {
+                    for (int z = minZ; z <= maxZ; z++) {
+                        for (int y = minY; y <= maxY; y++) {
+                            Location checkLoc = new Location(world, x, y, z);
+                            Block block = world.getBlockAt(checkLoc);
+
+                            if (block.getType() == Material.GOLD_BLOCK) {
+                                goldBlockLocation = checkLoc.add(0.5, 1, 0.5);
+                                plugin.getLogger().info("Found gold block at: X=" + goldBlockLocation.getBlockX() +
+                                        " Y=" + goldBlockLocation.getBlockY() +
+                                        " Z=" + goldBlockLocation.getBlockZ());
+                                break outerLoop;
+                            }
+                        }
+                    }
+                }
+            } else {
+                plugin.getLogger().warning("Could not determine schematic bounds. Scanning default area...");
+                // Fallback to default scan
+                int minY = world.getMinHeight();
+                int maxY = world.getMaxHeight();
+
+                outerLoop: for (int x = -50; x <= 50; x++) {
+                    for (int z = -50; z <= 50; z++) {
+                        for (int y = minY; y < maxY; y++) {
+                            Location checkLoc = new Location(world, x, y, z);
+                            Block block = world.getBlockAt(checkLoc);
+
+                            if (block.getType() == Material.GOLD_BLOCK) {
+                                goldBlockLocation = checkLoc.add(0.5, 1, 0.5);
+                                break outerLoop;
+                            }
                         }
                     }
                 }
@@ -210,7 +245,8 @@ public class MapManager {
                 plugin.getLogger().warning("No gold block found in map! Using default spawn location.");
             }
 
-            Location finalGoldLocation = goldBlockLocation != null ? goldBlockLocation : pasteLocation.clone().add(0, 1, 0);
+            Location finalGoldLocation = goldBlockLocation != null ? goldBlockLocation
+                    : pasteLocation.clone().add(0, 1, 0);
 
             Bukkit.getScheduler().runTask(plugin, () -> {
                 instance.setSpawnLocation(finalGoldLocation);
@@ -218,6 +254,53 @@ public class MapManager {
                         " Y=" + finalGoldLocation.getBlockY() +
                         " Z=" + finalGoldLocation.getBlockZ());
                 instance.setState(MapState.WAITING);
+
+                // Teleport waiting players
+                for (UUID playerId : instance.getWaitingPlayers()) {
+                    Player player = Bukkit.getPlayer(playerId);
+                    if (player != null && player.isOnline()) {
+                        // Re-check permissions and bans just in case
+                        if (!configManager.canPlayerJoinMap(player, instance.getMapName())) {
+                            player.sendMessage(ChatColor.RED + "You don't have permission to join this map!");
+                            continue;
+                        }
+
+                        // Check full
+                        if (instance.getPlayers().size() >= configManager.getMaxPlayers()) {
+                            player.sendMessage(ChatColor.RED + "Map is full!");
+                            continue;
+                        }
+
+                        instance.addPlayer(playerId);
+                        playerToInstance.put(playerId, instance.getInstanceId());
+
+                        // Teleport
+                        try {
+                            player.teleportAsync(finalGoldLocation).thenAccept(success -> {
+                                if (success) {
+                                    player.setGameMode(GameMode.ADVENTURE);
+                                    player.sendMessage(ChatColor.GREEN + "Map is ready! Welcome to "
+                                            + instance.getMapName() + "!");
+                                }
+                            });
+                        } catch (NoSuchMethodError e) {
+                            player.teleport(finalGoldLocation);
+                            player.setGameMode(GameMode.ADVENTURE);
+                            player.sendMessage(
+                                    ChatColor.GREEN + "Map is ready! Welcome to " + instance.getMapName() + "!");
+                        }
+                    }
+                }
+                instance.clearWaitingPlayers();
+
+                if (!instance.getPlayers().isEmpty()) {
+                    instance.setState(MapState.RUNNING);
+                } else {
+                    // No one joined (everyone quit while waiting), destroy map
+                    plugin.getLogger().info("Map " + instance.getInstanceId()
+                            + " creation finished but no players joined. Destroying.");
+                    destroyMap(instance.getInstanceId());
+                }
             });
         });
     }
@@ -227,6 +310,19 @@ public class MapManager {
 
         if (instance == null) {
             return false;
+        }
+
+        // Prevent joining same map
+        if (instanceId.equals(playerToInstance.get(player.getUniqueId()))) {
+            player.sendMessage(ChatColor.RED + "You are already in this map!");
+            return false;
+        }
+
+        if (instance.getState() == MapState.CREATING) {
+            player.sendMessage(ChatColor.YELLOW
+                    + "Please be patient. It is taking longer than usual to join/prepare the map. Please contact an admin if this issue persists.");
+            instance.addWaitingPlayer(player.getUniqueId());
+            return true;
         }
 
         if (instance.getState() != MapState.WAITING && instance.getState() != MapState.RUNNING) {
@@ -302,17 +398,23 @@ public class MapManager {
                 player.sendMessage(ChatColor.YELLOW + "You left the map.");
             }
 
-            if (instance.getPlayers().isEmpty() && !instance.isPublic()) {
+            if (instance.getPlayers().isEmpty()) {
                 instance.setState(MapState.ENDING);
 
                 // Get cleanup delay from config (default 15 seconds)
                 long cleanupDelay = configManager.getCleanupDelay();
 
+                plugin.getLogger()
+                        .info("Map " + instanceId + " is empty. Scheduling deletion in " + cleanupDelay + " seconds.");
+
                 // Schedule world cleanup after delay
                 Bukkit.getScheduler().runTaskLater(plugin, () -> {
                     // Check again if still empty
-                    if (instance.getPlayers().isEmpty()) {
+                    if (instance.getPlayers().isEmpty() && instance.getWaitingPlayers().isEmpty()) {
                         destroyMap(instanceId);
+                    } else {
+                        plugin.getLogger().info("Map " + instanceId + " is no longer empty, cancelling deletion.");
+                        instance.setState(MapState.RUNNING);
                     }
                 }, cleanupDelay * 20L); // Convert seconds to ticks
             }
@@ -332,6 +434,11 @@ public class MapManager {
 
             // First, unload the world properly
             Bukkit.getScheduler().runTask(plugin, () -> {
+                // Kick any players that might have joined in the last tick (unlikely but safe)
+                for (Player p : world.getPlayers()) {
+                    p.teleport(Bukkit.getWorlds().get(0).getSpawnLocation());
+                }
+
                 boolean unloaded = Bukkit.unloadWorld(world, false);
 
                 if (unloaded) {
@@ -341,8 +448,13 @@ public class MapManager {
                     Bukkit.getScheduler().runTaskLater(plugin, () -> {
                         java.io.File worldFolder = new java.io.File(Bukkit.getWorldContainer(), worldName);
                         if (worldFolder.exists()) {
-                            deleteFolder(worldFolder);
-                            plugin.getLogger().info("World folder deleted: " + worldName);
+                            // Force delete
+                            boolean deleted = deleteFolder(worldFolder);
+                            if (deleted) {
+                                plugin.getLogger().info("World folder deleted: " + worldName);
+                            } else {
+                                plugin.getLogger().warning("Failed to delete world folder: " + worldName);
+                            }
                         }
                     }, 40L); // 2 second delay
                 } else {
@@ -357,7 +469,7 @@ public class MapManager {
         deleteFolder(worldFolder);
     }
 
-    private void deleteFolder(java.io.File folder) {
+    private boolean deleteFolder(java.io.File folder) {
         if (folder.exists()) {
             java.io.File[] files = folder.listFiles();
             if (files != null) {
@@ -369,8 +481,9 @@ public class MapManager {
                     }
                 }
             }
-            folder.delete();
+            return folder.delete();
         }
+        return false;
     }
 
     public MapInstance getInstance(String instanceId) {

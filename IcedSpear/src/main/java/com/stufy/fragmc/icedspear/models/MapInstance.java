@@ -12,6 +12,7 @@ public class MapInstance {
     private Location spawnLocation;
     private MapState state;
     private final Set<UUID> players;
+    private final Set<UUID> waitingPlayers;
     private final long createdAt;
 
     public MapInstance(String instanceId, String mapName, boolean isPublic) {
@@ -20,6 +21,7 @@ public class MapInstance {
         this.isPublic = isPublic;
         this.state = MapState.CREATING;
         this.players = new HashSet<>();
+        this.waitingPlayers = new HashSet<>();
         this.createdAt = System.currentTimeMillis();
     }
 
@@ -69,6 +71,19 @@ public class MapInstance {
 
     public void removePlayer(UUID playerId) {
         players.remove(playerId);
+        waitingPlayers.remove(playerId);
+    }
+
+    public void addWaitingPlayer(UUID playerId) {
+        waitingPlayers.add(playerId);
+    }
+
+    public Set<UUID> getWaitingPlayers() {
+        return new HashSet<>(waitingPlayers);
+    }
+
+    public void clearWaitingPlayers() {
+        waitingPlayers.clear();
     }
 
     public long getCreatedAt() {

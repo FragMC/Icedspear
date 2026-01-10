@@ -10,12 +10,14 @@ import java.util.concurrent.ConcurrentHashMap;
 public class PartyManager {
     private final IcedSpear plugin;
     private final MapManager mapManager;
+    private final ConfigManager configManager;
     private final Map<String, Party> parties;
     private final Map<UUID, String> playerToParty;
 
-    public PartyManager(IcedSpear plugin, MapManager mapManager) {
+    public PartyManager(IcedSpear plugin, MapManager mapManager, ConfigManager configManager) {
         this.plugin = plugin;
         this.mapManager = mapManager;
+        this.configManager = configManager;
         this.parties = new ConcurrentHashMap<>();
         this.playerToParty = new ConcurrentHashMap<>();
     }
@@ -38,6 +40,11 @@ public class PartyManager {
         Party party = parties.get(code);
 
         if (party == null) {
+            return false;
+        }
+
+        if (party.getMembers().size() >= configManager.getMaxPlayers()) {
+            player.sendMessage(ChatColor.RED + "This party is full!");
             return false;
         }
 
@@ -66,13 +73,43 @@ public class PartyManager {
         if (party != null) {
             party.removeMember(player.getUniqueId());
 
-            if (party.getLeader().equals(player.getUniqueId())) {
+            if (party.getMembers().isEmpty()) {
+                disbandParty(code);
+            } else if (party.getLeader().equals(player.getUniqueId())) {
                 // Party leader left, disband party
                 disbandParty(code);
             } else {
                 notifyParty(party, ChatColor.YELLOW + player.getName() + " left the party.");
             }
         }
+    }
+
+    public boolean kickMember(Player leader, String targetName) {
+        String code = playerToParty.get(leader.getUniqueId());
+        if (code == null)
+            return false;
+
+        Party party = parties.get(code);
+        if (party == null || !party.getLeader().equals(leader.getUniqueId()))
+            return false;
+
+        Player target = plugin.getServer().getPlayer(targetName);
+        if (target == null)
+            return false;
+
+        if (!party.getMembers().contains(target.getUniqueId()))
+            return false;
+        if (target.getUniqueId().equals(leader.getUniqueId()))
+            return false; // Cannot kick self
+
+        // Remove player
+        party.removeMember(target.getUniqueId());
+        playerToParty.remove(target.getUniqueId());
+
+        target.sendMessage(ChatColor.RED + "You have been kicked from the party.");
+        notifyParty(party, ChatColor.YELLOW + target.getName() + " has been kicked from the party.");
+
+        return true;
     }
 
     public void disbandParty(String code) {

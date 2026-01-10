@@ -21,7 +21,7 @@ public class IcedSpear extends JavaPlugin {
         configManager = new ConfigManager(this);
         schematicManager = new SchematicManager(this);
         mapManager = new MapManager(this, schematicManager, configManager);
-        partyManager = new PartyManager(this, mapManager);
+        partyManager = new PartyManager(this, mapManager, configManager);
         friendManager = new FriendManager(this);
 
         // Register commands

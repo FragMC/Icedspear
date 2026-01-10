@@ -179,6 +179,37 @@ public class FriendCommand implements CommandExecutor, TabCompleter {
         if (args.length == 1) {
             return Arrays.asList("add", "accept", "remove", "list", "requests");
         }
+        
+        if (args.length == 2) {
+            if (args[0].equalsIgnoreCase("add")) {
+                return null; // Return null to show online players
+            }
+            if (args[0].equalsIgnoreCase("remove")) {
+                if (sender instanceof Player) {
+                    Player player = (Player) sender;
+                    Set<UUID> friends = friendManager.getFriends(player.getUniqueId());
+                    List<String> names = new ArrayList<>();
+                    for (UUID id : friends) {
+                        OfflinePlayer p = Bukkit.getOfflinePlayer(id);
+                        if (p.getName() != null) names.add(p.getName());
+                    }
+                    return names;
+                }
+            }
+            if (args[0].equalsIgnoreCase("accept")) {
+                if (sender instanceof Player) {
+                    Player player = (Player) sender;
+                    Set<UUID> requests = friendManager.getPendingRequests(player.getUniqueId());
+                    List<String> names = new ArrayList<>();
+                    for (UUID id : requests) {
+                        OfflinePlayer p = Bukkit.getOfflinePlayer(id);
+                        if (p.getName() != null) names.add(p.getName());
+                    }
+                    return names;
+                }
+            }
+        }
+        
         return new ArrayList<>();
     }
 }

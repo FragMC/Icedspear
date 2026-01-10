@@ -60,6 +60,14 @@ public class PartyCommand implements CommandExecutor, TabCompleter {
                 handleListParty(player);
                 break;
 
+            case "kick":
+                if (args.length < 2) {
+                    player.sendMessage(ChatColor.RED + "Usage: /party kick <player>");
+                    return true;
+                }
+                handleKickParty(player, args[1]);
+                break;
+
             default:
                 sendUsage(player);
                 break;
@@ -151,20 +159,58 @@ public class PartyCommand implements CommandExecutor, TabCompleter {
         }
     }
 
+    private void handleKickParty(Player player, String targetName) {
+        boolean success = partyManager.kickMember(player, targetName);
+
+        if (success) {
+            player.sendMessage(ChatColor.GREEN + "Kicked " + targetName + " from the party.");
+        } else {
+            player.sendMessage(
+                    ChatColor.RED + "Failed to kick player. Are you the leader? Is the player in your party?");
+        }
+    }
+
     private void sendUsage(Player player) {
         player.sendMessage(ChatColor.GOLD + "=== IcedSpear Party Commands ===");
         player.sendMessage(ChatColor.YELLOW + "/party create" + ChatColor.GRAY + " - Create a new party");
         player.sendMessage(ChatColor.YELLOW + "/party join <code>" + ChatColor.GRAY + " - Join a party");
         player.sendMessage(ChatColor.YELLOW + "/party leave" + ChatColor.GRAY + " - Leave your party");
-        player.sendMessage(ChatColor.YELLOW + "/party map <mapname>" + ChatColor.GRAY + " - Start a party map (leader only)");
+        player.sendMessage(
+                ChatColor.YELLOW + "/party map <mapname>" + ChatColor.GRAY + " - Start a party map (leader only)");
+        player.sendMessage(
+                ChatColor.YELLOW + "/party kick <player>" + ChatColor.GRAY + " - Kick a player (leader only)");
         player.sendMessage(ChatColor.YELLOW + "/party list" + ChatColor.GRAY + " - List party members");
     }
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            return Arrays.asList("create", "join", "leave", "map", "list");
+            return Arrays.asList("create", "join", "leave", "map", "kick", "list");
         }
+
+        if (args.length == 2) {
+            if (args[0].equalsIgnoreCase("kick")) {
+                if (sender instanceof Player) {
+                    Player player = (Player) sender;
+                    String code = partyManager.getPlayerParty(player.getUniqueId());
+                    if (code != null) {
+                        Party party = partyManager.getParty(code);
+                        if (party != null) {
+                            List<String> members = new ArrayList<>();
+                            for (UUID id : party.getMembers()) {
+                                Player p = player.getServer().getPlayer(id);
+                                if (p != null && !p.equals(player)) {
+                                    members.add(p.getName());
+                                }
+                            }
+                            return members;
+                        }
+                    }
+                }
+                return new ArrayList<>();
+            }
+        }
+
         return new ArrayList<>();
     }
 }
