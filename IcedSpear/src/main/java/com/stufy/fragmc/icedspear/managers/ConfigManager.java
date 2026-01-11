@@ -1,8 +1,14 @@
 package com.stufy.fragmc.icedspear.managers;
 
 import com.stufy.fragmc.icedspear.IcedSpear;
+import org.bukkit.GameMode;
+import org.bukkit.GameRule;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
+
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ConfigManager {
     private final IcedSpear plugin;
@@ -27,6 +33,85 @@ public class ConfigManager {
     public void setCleanupDelay(long seconds) {
         plugin.getConfig().set("cleanup-delay-seconds", seconds);
         plugin.saveConfig();
+    }
+
+    public long getNoJoinCleanupDelay() {
+        return plugin.getConfig().getLong("no-join-cleanup-delay-seconds", 60);
+    }
+
+    public GameMode getDefaultGameMode() {
+        String mode = plugin.getConfig().getString("default-gamemode", "ADVENTURE");
+        try {
+            return GameMode.valueOf(mode.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            plugin.getLogger().warning("Invalid gamemode in config: " + mode + ", using ADVENTURE");
+            return GameMode.ADVENTURE;
+        }
+    }
+
+    public List<String> getOnJoinCommands() {
+        return plugin.getConfig().getStringList("on-join-commands");
+    }
+
+    public void executeOnJoinCommands(Player player) {
+        List<String> commands = getOnJoinCommands();
+        for (String command : commands) {
+            String processedCommand = command.replace("%player%", player.getName());
+            plugin.getServer().dispatchCommand(plugin.getServer().getConsoleSender(), processedCommand);
+        }
+    }
+
+    public void applyWorldSettings(World world) {
+        // Apply time settings
+        long time = plugin.getConfig().getLong("world-settings.time", 6000);
+        world.setTime(time);
+
+        // Apply spawn settings
+        boolean keepSpawn = plugin.getConfig().getBoolean("world-settings.keep-spawn-in-memory", false);
+        world.setKeepSpawnInMemory(keepSpawn);
+
+        // Apply auto-save
+        boolean autoSave = plugin.getConfig().getBoolean("world-settings.auto-save", false);
+        world.setAutoSave(autoSave);
+
+        // Disable mob spawning
+        world.setSpawnFlags(false, false);
+
+        // Apply game rules
+        applyGameRules(world);
+    }
+
+    public void applyGameRules(World world) {
+        if (!plugin.getConfig().contains("world-gamerules")) {
+            // Apply default game rules if not in config
+            world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false);
+            world.setGameRule(GameRule.DO_WEATHER_CYCLE, false);
+            world.setGameRule(GameRule.DO_MOB_SPAWNING, false);
+            return;
+        }
+
+        var gameRulesSection = plugin.getConfig().getConfigurationSection("world-gamerules");
+        if (gameRulesSection == null) return;
+
+        for (String key : gameRulesSection.getKeys(false)) {
+            try {
+                GameRule<?> gameRule = GameRule.getByName(key);
+                if (gameRule == null) {
+                    plugin.getLogger().warning("Unknown game rule: " + key);
+                    continue;
+                }
+
+                Object value = gameRulesSection.get(key);
+
+                if (gameRule.getType() == Boolean.class) {
+                    world.setGameRule((GameRule<Boolean>) gameRule, (Boolean) value);
+                } else if (gameRule.getType() == Integer.class) {
+                    world.setGameRule((GameRule<Integer>) gameRule, ((Number) value).intValue());
+                }
+            } catch (Exception e) {
+                plugin.getLogger().warning("Failed to apply game rule " + key + ": " + e.getMessage());
+            }
+        }
     }
 
     public boolean canPlayerJoinMap(Player player, String mapName) {

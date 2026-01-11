@@ -1,6 +1,8 @@
 package com.stufy.fragmc.icedspear.managers;
 
 import com.stufy.fragmc.icedspear.IcedSpear;
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -14,12 +16,14 @@ public class FriendManager {
     private FileConfiguration friendsConfig;
     private final Map<UUID, Set<UUID>> friendships;
     private final Map<UUID, Set<UUID>> pendingRequests;
+    private final Map<UUID, Set<UUID>> joinRequests; // Friend -> Set of players requesting to join
 
     public FriendManager(IcedSpear plugin) {
         this.plugin = plugin;
         this.friendsFile = new File(plugin.getDataFolder(), "friends.yml");
         this.friendships = new HashMap<>();
         this.pendingRequests = new HashMap<>();
+        this.joinRequests = new HashMap<>();
 
         loadFriends();
     }
@@ -119,6 +123,83 @@ public class FriendManager {
 
         saveFriends();
         return true;
+    }
+
+    // ===== JOIN REQUEST SYSTEM =====
+
+    /**
+     * Send a request to join a friend's map
+     * @param requester Player requesting to join
+     * @param friend Friend whose map to join
+     * @return true if request was sent
+     */
+    public boolean sendJoinRequest(Player requester, Player friend) {
+        if (!areFriends(requester.getUniqueId(), friend.getUniqueId())) {
+            requester.sendMessage(ChatColor.RED + "You can only request to join friends!");
+            return false;
+        }
+
+        // Check if friend is in a map
+        String instanceId = plugin.getMapManager().getPlayerInstance(friend.getUniqueId());
+        if (instanceId == null) {
+            requester.sendMessage(ChatColor.RED + friend.getName() + " is not in a map!");
+            return false;
+        }
+
+        joinRequests.computeIfAbsent(friend.getUniqueId(), k -> new HashSet<>()).add(requester.getUniqueId());
+
+        requester.sendMessage(ChatColor.GREEN + "Join request sent to " + friend.getName() + "!");
+        friend.sendMessage(ChatColor.YELLOW + requester.getName() + " wants to join your map!");
+        friend.sendMessage(ChatColor.GRAY + "Use /friend acceptjoin " + requester.getName() + " to accept.");
+
+        return true;
+    }
+
+    /**
+     * Accept a join request
+     * @param accepter Player accepting the request
+     * @param requesterName Name of requester
+     * @return true if accepted
+     */
+    public boolean acceptJoinRequest(Player accepter, String requesterName) {
+        Player requester = Bukkit.getPlayer(requesterName);
+        if (requester == null) {
+            accepter.sendMessage(ChatColor.RED + "Player not found!");
+            return false;
+        }
+
+        Set<UUID> requests = joinRequests.get(accepter.getUniqueId());
+        if (requests == null || !requests.contains(requester.getUniqueId())) {
+            accepter.sendMessage(ChatColor.RED + "No join request from this player!");
+            return false;
+        }
+
+        requests.remove(requester.getUniqueId());
+
+        // Get the map instance and invite player
+        String instanceId = plugin.getMapManager().getPlayerInstance(accepter.getUniqueId());
+        if (instanceId == null) {
+            accepter.sendMessage(ChatColor.RED + "You are no longer in a map!");
+            return false;
+        }
+
+        boolean success = plugin.getMapManager().joinMap(requester, instanceId);
+        if (success) {
+            accepter.sendMessage(ChatColor.GREEN + requester.getName() + " is joining your map!");
+        } else {
+            accepter.sendMessage(ChatColor.RED + "Failed to add " + requester.getName() + " to your map!");
+        }
+
+        return success;
+    }
+
+    /**
+     * Get pending join requests for a player
+     * @param playerId Player UUID
+     * @return Set of requester UUIDs
+     */
+    public Set<UUID> getJoinRequests(UUID playerId) {
+        return new HashSet<>(joinRequests.getOrDefault(playerId, new HashSet<>()));
     }
 
     public Set<UUID> getFriends(UUID playerId) {

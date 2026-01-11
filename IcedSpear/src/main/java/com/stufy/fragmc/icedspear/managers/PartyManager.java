@@ -2,6 +2,7 @@ package com.stufy.fragmc.icedspear.managers;
 
 import com.stufy.fragmc.icedspear.IcedSpear;
 import com.stufy.fragmc.icedspear.models.Party;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import java.util.*;
@@ -13,6 +14,7 @@ public class PartyManager {
     private final ConfigManager configManager;
     private final Map<String, Party> parties;
     private final Map<UUID, String> playerToParty;
+    private final Map<UUID, Set<UUID>> partyInvites; // Player -> Set of party codes (as leader UUIDs)
 
     public PartyManager(IcedSpear plugin, MapManager mapManager, ConfigManager configManager) {
         this.plugin = plugin;
@@ -20,6 +22,7 @@ public class PartyManager {
         this.configManager = configManager;
         this.parties = new ConcurrentHashMap<>();
         this.playerToParty = new ConcurrentHashMap<>();
+        this.partyInvites = new ConcurrentHashMap<>();
     }
 
     public String createParty(Player leader) {
@@ -34,6 +37,75 @@ public class PartyManager {
         playerToParty.put(leader.getUniqueId(), code);
 
         return code;
+    }
+
+    /**
+     * Invite a friend to the party
+     * @param leader Party leader
+     * @param friendName Friend to invite
+     * @return true if invite sent
+     */
+    public boolean inviteFriend(Player leader, String friendName) {
+        String code = playerToParty.get(leader.getUniqueId());
+        if (code == null) {
+            leader.sendMessage(ChatColor.RED + "You're not in a party!");
+            return false;
+        }
+
+        Party party = parties.get(code);
+        if (party == null || !party.getLeader().equals(leader.getUniqueId())) {
+            leader.sendMessage(ChatColor.RED + "Only the party leader can invite players!");
+            return false;
+        }
+
+        Player friend = Bukkit.getPlayer(friendName);
+        if (friend == null) {
+            leader.sendMessage(ChatColor.RED + "Player not found!");
+            return false;
+        }
+
+        if (playerToParty.containsKey(friend.getUniqueId())) {
+            leader.sendMessage(ChatColor.RED + friend.getName() + " is already in a party!");
+            return false;
+        }
+
+        partyInvites.computeIfAbsent(friend.getUniqueId(), k -> new HashSet<>()).add(leader.getUniqueId());
+
+        leader.sendMessage(ChatColor.GREEN + "Invited " + friend.getName() + " to the party!");
+        friend.sendMessage(ChatColor.YELLOW + leader.getName() + " invited you to their party!");
+        friend.sendMessage(ChatColor.GRAY + "Use /party accept " + leader.getName() + " to accept.");
+
+        return true;
+    }
+
+    /**
+     * Accept a party invite
+     * @param player Player accepting
+     * @param inviterName Name of inviter
+     * @return true if accepted
+     */
+    public boolean acceptInvite(Player player, String inviterName) {
+        Player inviter = Bukkit.getPlayer(inviterName);
+        if (inviter == null) {
+            player.sendMessage(ChatColor.RED + "Player not found!");
+            return false;
+        }
+
+        Set<UUID> invites = partyInvites.get(player.getUniqueId());
+        if (invites == null || !invites.contains(inviter.getUniqueId())) {
+            player.sendMessage(ChatColor.RED + "No party invite from this player!");
+            return false;
+        }
+
+        invites.remove(inviter.getUniqueId());
+
+        String code = playerToParty.get(inviter.getUniqueId());
+        if (code == null) {
+            player.sendMessage(ChatColor.RED + "Party no longer exists!");
+            return false;
+        }
+
+        return joinParty(player, code);
     }
 
     public boolean joinParty(Player player, String code) {
@@ -55,8 +127,7 @@ public class PartyManager {
         party.addMember(player.getUniqueId());
         playerToParty.put(player.getUniqueId(), code);
 
-        // Notify all party members
-        notifyParty(party, ChatColor.GREEN + player.getName() + " joined the party!");
+        broadcastToParty(party, ChatColor.GREEN + player.getName() + " joined the party!");
 
         return true;
     }
@@ -76,38 +147,31 @@ public class PartyManager {
             if (party.getMembers().isEmpty()) {
                 disbandParty(code);
             } else if (party.getLeader().equals(player.getUniqueId())) {
-                // Party leader left, disband party
                 disbandParty(code);
             } else {
-                notifyParty(party, ChatColor.YELLOW + player.getName() + " left the party.");
+                broadcastToParty(party, ChatColor.YELLOW + player.getName() + " left the party.");
             }
         }
     }
 
     public boolean kickMember(Player leader, String targetName) {
         String code = playerToParty.get(leader.getUniqueId());
-        if (code == null)
-            return false;
+        if (code == null) return false;
 
         Party party = parties.get(code);
-        if (party == null || !party.getLeader().equals(leader.getUniqueId()))
-            return false;
+        if (party == null || !party.getLeader().equals(leader.getUniqueId())) return false;
 
         Player target = plugin.getServer().getPlayer(targetName);
-        if (target == null)
-            return false;
+        if (target == null) return false;
 
-        if (!party.getMembers().contains(target.getUniqueId()))
-            return false;
-        if (target.getUniqueId().equals(leader.getUniqueId()))
-            return false; // Cannot kick self
+        if (!party.getMembers().contains(target.getUniqueId())) return false;
+        if (target.getUniqueId().equals(leader.getUniqueId())) return false;
 
-        // Remove player
         party.removeMember(target.getUniqueId());
         playerToParty.remove(target.getUniqueId());
 
         target.sendMessage(ChatColor.RED + "You have been kicked from the party.");
-        notifyParty(party, ChatColor.YELLOW + target.getName() + " has been kicked from the party.");
+        broadcastToParty(party, ChatColor.YELLOW + target.getName() + " has been kicked from the party.");
 
         return true;
     }
@@ -120,7 +184,7 @@ public class PartyManager {
                 playerToParty.remove(memberId);
             }
 
-            notifyParty(party, ChatColor.RED + "Party has been disbanded.");
+            broadcastToParty(party, ChatColor.RED + "Party has been disbanded.");
         }
     }
 
@@ -140,7 +204,6 @@ public class PartyManager {
         String instanceId = mapManager.createPartyMap(mapName, code);
         party.setCurrentMap(instanceId);
 
-        // Wait for map to be ready, then teleport all members
         plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
             for (UUID memberId : party.getMembers()) {
                 Player member = plugin.getServer().getPlayer(memberId);
@@ -148,9 +211,40 @@ public class PartyManager {
                     mapManager.joinMap(member, instanceId);
                 }
             }
-        }, 100L); // 5 second delay
+        }, 100L);
 
         return true;
+    }
+
+    /**
+     * Send a message to party chat
+     * @param player Player sending message
+     * @param message Message content
+     * @return true if sent
+     */
+    public boolean sendPartyChat(Player player, String message) {
+        String code = playerToParty.get(player.getUniqueId());
+        if (code == null) {
+            player.sendMessage(ChatColor.RED + "You're not in a party!");
+            return false;
+        }
+
+        Party party = parties.get(code);
+        if (party == null) return false;
+
+        String formatted = ChatColor.LIGHT_PURPLE + "[Party] " + ChatColor.WHITE + player.getName() + ChatColor.GRAY + ": " + ChatColor.WHITE + message;
+        broadcastToParty(party, formatted);
+
+        return true;
+    }
+
+    public void broadcastToParty(Party party, String message) {
+        for (UUID memberId : party.getMembers()) {
+            Player member = plugin.getServer().getPlayer(memberId);
+            if (member != null && member.isOnline()) {
+                member.sendMessage(message);
+            }
+        }
     }
 
     public Party getParty(String code) {
@@ -161,13 +255,8 @@ public class PartyManager {
         return playerToParty.get(playerId);
     }
 
-    private void notifyParty(Party party, String message) {
-        for (UUID memberId : party.getMembers()) {
-            Player member = plugin.getServer().getPlayer(memberId);
-            if (member != null && member.isOnline()) {
-                member.sendMessage(message);
-            }
-        }
+    public Set<UUID> getPartyInvites(UUID playerId) {
+        return new HashSet<>(partyInvites.getOrDefault(playerId, new HashSet<>()));
     }
 
     private String generatePartyCode() {

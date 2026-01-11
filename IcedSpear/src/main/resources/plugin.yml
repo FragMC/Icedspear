@@ -1,9 +1,9 @@
 name: IcedSpear
-version: 1.1.0
+version: 1.3.0
 main: com.stufy.fragmc.icedspear.IcedSpear
 api-version: 1.21
 author: Stufy
-description: Custom map lobbies plugin with party system
+description: Custom map lobbies plugin with party system, timers, and leaderboards
 depend: [FastAsyncWorldEdit]
 
 # Paper-specific optimizations
@@ -30,6 +30,12 @@ commands:
     description: Admin commands
     usage: /<command> <import|list|reload|config|block|unblock> [args]
     permission: icedspear.admin
+
+  leaderboard:
+    description: View map leaderboards
+    usage: /<command> [mapname]
+    aliases: [lb, top, times]
+    permission: icedspear.leaderboard
 
 permissions:
   icedspear.admin:
@@ -62,4 +68,8 @@ permissions:
 
   icedspear.friend:
     description: Access to friend commands
+    default: true
+
+  icedspear.leaderboard:
+    description: View leaderboards
     default: true
