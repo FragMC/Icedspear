@@ -260,14 +260,27 @@ public class SchematicManager {
     }
 
     public boolean importSchematic(String worldEditName, String targetName) {
-        File weFolder = new File(plugin.getServer().getWorldContainer(), "plugins/WorldEdit/schematics");
+        // Try FAWE location first
+        File weFolder = new File(plugin.getDataFolder().getParentFile(), "FastAsyncWorldEdit/schematics");
         File sourceFile = new File(weFolder, worldEditName + ".schem");
 
         if (!sourceFile.exists()) {
             sourceFile = new File(weFolder, worldEditName + ".schematic");
         }
 
+        // Fallback to WorldEdit location if not found
         if (!sourceFile.exists()) {
+            weFolder = new File(plugin.getServer().getWorldContainer(), "plugins/WorldEdit/schematics");
+            sourceFile = new File(weFolder, worldEditName + ".schem");
+
+            if (!sourceFile.exists()) {
+                sourceFile = new File(weFolder, worldEditName + ".schematic");
+            }
+        }
+
+        if (!sourceFile.exists()) {
+            plugin.getLogger().warning("Schematic not found in FAWE or WorldEdit folders: " + worldEditName);
+            plugin.getLogger().warning("Checked: plugins/FastAsyncWorldEdit/schematics/ and plugins/WorldEdit/schematics/");
             return false;
         }
 
