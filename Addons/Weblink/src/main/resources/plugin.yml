@@ -1,0 +1,21 @@
+name: WebLinkAddon
+version: 1.0.0
+main: com.fragmc.weblink.WebLinkAddon
+author: FragMC
+description: Web integration addon for IcedSpear
+api-version: 1.21
+depend: [IcedSpear]
+
+commands:
+  weblink:
+    description: Link your Minecraft account to the website
+    usage: /weblink <link|unlink|status>
+    aliases: [wl]
+
+permissions:
+  weblink.use:
+    description: Allows using the weblink command
+    default: true
+  weblink.admin:
+    description: Admin permissions for weblink
+    default: op

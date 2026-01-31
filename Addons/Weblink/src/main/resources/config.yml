@@ -1,0 +1,12 @@
+# WebLink Addon Configuration
+
+# Webhook server settings
+webhook-port: 25531
+
+# CRITICAL: Change this to a strong random string!
+# Generate one at: https://www.uuidgenerator.net/
+webhook-secret: "CHANGE_ME_IN_CONFIG"
+
+# Linked accounts storage
+# Format: UUID: hashed-ACCID
+linked-accounts: {}
