@@ -1,5 +1,5 @@
 name: WebLinkAddon
-version: 1.2.1
+version: 1.2.2
 main: com.fragmc.weblink.WebLinkAddon
 author: FragMC
 description: Web integration addon for IcedSpear

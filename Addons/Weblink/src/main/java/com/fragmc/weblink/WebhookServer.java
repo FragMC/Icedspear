@@ -83,7 +83,7 @@ public class WebhookServer {
         ex.getResponseHeaders().set("Content-Type", "application/json");
         ex.getResponseHeaders().set("Access-Control-Allow-Origin", corsOrigin);
         ex.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-        ex.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type, X-Webhook-Signature, X-Command-Token");
+        ex.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type, X-Webhook-Signature, X-Command-Token, X-Signature");
 
         ex.sendResponseHeaders(status, bytes.length);
         OutputStream os = ex.getResponseBody();
@@ -316,24 +316,27 @@ public class WebhookServer {
         public void handle(HttpExchange ex) throws IOException {
             if (handlePreflight(ex)) return;
 
-            if (!"POST".equals(ex.getRequestMethod())) {
+            if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
                 sendResponse(ex, 405, errorResponse("Method not allowed").toString());
                 return;
             }
 
             try {
-                JsonObject json = lenientParse(readBody(ex));
+                String raw = readBody(ex);
+                JsonObject json = lenientParse(raw);
+
                 String uuidStr = json.get("uuid").getAsString();
                 String accid = json.get("accid").getAsString();
 
                 UUID playerUUID = UUID.fromString(uuidStr);
 
-                // Verify account link
+                // verify link (plugin should store hashed accid)
                 if (!plugin.getSecurityManager().verifyAccountLink(playerUUID, accid)) {
                     sendResponse(ex, 403, errorResponse("Account not linked").toString());
                     return;
                 }
 
+                // check permission
                 Player player = Bukkit.getPlayer(playerUUID);
                 boolean isAdmin = false;
                 String username = null;
@@ -346,8 +349,9 @@ public class WebhookServer {
                 JsonObject resp = new JsonObject();
                 resp.addProperty("success", true);
                 resp.addProperty("admin", isAdmin);
-                if (username != null) resp.addProperty("username", username);
-
+                if (username != null) {
+                    resp.addProperty("username", username);
+                }
                 sendResponse(ex, 200, resp.toString());
             } catch (Exception e) {
                 plugin.getLogger().warning("check-admin error: " + e.getMessage());
