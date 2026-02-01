@@ -3,7 +3,6 @@ package com.fragmc.weblink;
 import org.bukkit.entity.Player;
 
 import java.security.SecureRandom;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -12,127 +11,151 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class LinkManager {
+
     private final WebLinkAddon plugin;
+    private final Database     db;
+
+    // In-memory caches — mirrors the DB for fast lookups.
+    // Every mutation writes to SQLite first; cache is updated only on success.
+    private final Map<UUID,   String> linkedAccounts; // MC UUID  → hashed ACCID
+    private final Map<String, UUID>   reverseLinks;   // hashed ACCID → MC UUID
+
+    // Pending (unverified) codes — ephemeral, never persisted.
     private final Map<String, LinkCode> pendingLinks;
-    private final Map<UUID, String> linkedAccounts; // MC UUID -> ACCID
-    private final Map<String, UUID> reverseLinks; // ACCID -> MC UUID (primary account)
+
     private final ScheduledExecutorService scheduler;
-    private static final String CHARACTERS = "0123456789";
-    private static final int CODE_LENGTH = 6;
-    private static final long CODE_EXPIRY_MS = 120000; // 2 minutes
 
-    public LinkManager(WebLinkAddon plugin) {
-        this.plugin = plugin;
-        this.pendingLinks = new ConcurrentHashMap<>();
+    private static final String CHARACTERS    = "0123456789";
+    private static final int   CODE_LENGTH   = 6;
+    private static final long  CODE_EXPIRY_MS = 120_000; // 2 minutes
+
+    // ------------------------------------------------------------------
+
+    public LinkManager(WebLinkAddon plugin, Database db) {
+        this.plugin        = plugin;
+        this.db            = db;
+        this.pendingLinks  = new ConcurrentHashMap<>();
         this.linkedAccounts = new ConcurrentHashMap<>();
-        this.reverseLinks = new ConcurrentHashMap<>();
-        this.scheduler = Executors.newSingleThreadScheduledExecutor();
+        this.reverseLinks   = new ConcurrentHashMap<>();
+        this.scheduler      = Executors.newSingleThreadScheduledExecutor();
 
-        // Cleanup expired codes every 30 seconds
         scheduler.scheduleAtFixedRate(this::cleanupExpiredCodes, 30, 30, TimeUnit.SECONDS);
 
-        // Load linked accounts from database/config
+        // Warm caches from the database
         loadLinkedAccounts();
     }
 
-    public String generateLinkCode(Player player) {
-        // Remove any existing code for this player
-        pendingLinks.values().removeIf(code -> code.getPlayerUUID().equals(player.getUniqueId()));
+    // ------------------------------------------------------------------
+    // Code generation
+    // ------------------------------------------------------------------
 
-        // Generate new 6-digit code
-        SecureRandom random = new SecureRandom();
-        StringBuilder code = new StringBuilder();
+    public String generateLinkCode(Player player) {
+        // Discard any previous pending code for this player
+        pendingLinks.values().removeIf(c -> c.playerUUID.equals(player.getUniqueId()));
+
+        SecureRandom rng = new SecureRandom();
+        StringBuilder sb = new StringBuilder(CODE_LENGTH);
         for (int i = 0; i < CODE_LENGTH; i++) {
-            code.append(CHARACTERS.charAt(random.nextInt(CHARACTERS.length())));
+            sb.append(CHARACTERS.charAt(rng.nextInt(CHARACTERS.length())));
         }
 
-        String linkCode = code.toString();
-        LinkCode codeObj = new LinkCode(player.getUniqueId(), player.getName(), linkCode);
-        pendingLinks.put(linkCode, codeObj);
-
-        plugin.getLogger().info("Generated link code " + linkCode + " for " + player.getName());
-        return linkCode;
+        String code = sb.toString();
+        pendingLinks.put(code, new LinkCode(player.getUniqueId(), player.getName()));
+        plugin.getLogger().info("Generated link code " + code + " for " + player.getName());
+        return code;
     }
 
-    public boolean verifyAndLinkAccount(String code, String accid) {
-        LinkCode linkCode = pendingLinks.get(code);
+    // ------------------------------------------------------------------
+    // Code verification & linking
+    // ------------------------------------------------------------------
+
+    /**
+     * Verify a code and persist the link.
+     *
+     * @param code        The 6-digit code the player received in-game.
+     * @param hashedAccid The SHA-256 hex of the website ACCID
+     *                    (hashing is done by the caller — see WebhookServer).
+     * @return true when the link was successfully created.
+     */
+    public boolean verifyAndLinkAccount(String code, String hashedAccid) {
+        LinkCode linkCode = pendingLinks.remove(code); // consume immediately — single-use
+
         if (linkCode == null) {
+            plugin.getLogger().warning("Verify attempted with unknown/already-used code: " + code);
             return false;
         }
 
         if (linkCode.isExpired()) {
-            pendingLinks.remove(code);
+            plugin.getLogger().warning("Verify attempted with expired code for " + linkCode.playerName);
             return false;
         }
 
-        // Link the account
-        UUID playerUUID = linkCode.getPlayerUUID();
-        linkedAccounts.put(playerUUID, accid);
-        reverseLinks.put(accid, playerUUID);
+        UUID playerUUID = linkCode.playerUUID;
 
-        // Remove the code
-        pendingLinks.remove(code);
+        // Persist first
+        db.save(playerUUID, hashedAccid);
 
-        // Save to database/config
-        saveLinkedAccount(playerUUID, accid);
+        // Then update caches
+        linkedAccounts.put(playerUUID, hashedAccid);
+        reverseLinks.put(hashedAccid, playerUUID);
 
-        plugin.getLogger().info("Linked account " + accid + " to " + linkCode.getPlayerName());
+        plugin.getLogger().info("Linked hashed-ACCID to " + linkCode.playerName + " (" + playerUUID + ")");
         return true;
     }
+
+    // ------------------------------------------------------------------
+    // Queries (read from cache)
+    // ------------------------------------------------------------------
 
     public boolean isLinked(UUID playerUUID) {
         return linkedAccounts.containsKey(playerUUID);
     }
 
+    /** Returns the hashed ACCID stored for this MC UUID, or null. */
     public String getLinkedAccount(UUID playerUUID) {
         return linkedAccounts.get(playerUUID);
     }
 
-    public UUID getLinkedPlayer(String accid) {
-        return reverseLinks.get(accid);
+    /** Reverse lookup: hashed ACCID → MC UUID, or null. */
+    public UUID getLinkedPlayer(String hashedAccid) {
+        return reverseLinks.get(hashedAccid);
     }
+
+    // ------------------------------------------------------------------
+    // Unlink
+    // ------------------------------------------------------------------
 
     public boolean unlinkAccount(UUID playerUUID) {
         String accid = linkedAccounts.remove(playerUUID);
-        if (accid != null) {
-            reverseLinks.remove(accid);
-            removeLinkedAccount(playerUUID);
-            return true;
-        }
-        return false;
+        if (accid == null) return false;
+
+        reverseLinks.remove(accid);
+        db.delete(playerUUID);
+
+        plugin.getLogger().info("Unlinked account for " + playerUUID);
+        return true;
     }
 
+    // ------------------------------------------------------------------
+    // Internal
+    // ------------------------------------------------------------------
+
     private void cleanupExpiredCodes() {
-        pendingLinks.entrySet().removeIf(entry -> entry.getValue().isExpired());
+        pendingLinks.entrySet().removeIf(e -> e.getValue().isExpired());
     }
 
     private void loadLinkedAccounts() {
-        // Load from config
-        if (plugin.getConfig().contains("linked-accounts")) {
-            Map<String, Object> accounts = plugin.getConfig().getConfigurationSection("linked-accounts").getValues(false);
-            for (Map.Entry<String, Object> entry : accounts.entrySet()) {
-                try {
-                    UUID uuid = UUID.fromString(entry.getKey());
-                    String accid = (String) entry.getValue();
-                    linkedAccounts.put(uuid, accid);
-                    reverseLinks.put(accid, uuid);
-                } catch (Exception e) {
-                    plugin.getLogger().warning("Failed to load linked account: " + entry.getKey());
-                }
-            }
+        Map<UUID, String> all = db.loadAll();
+        for (Map.Entry<UUID, String> entry : all.entrySet()) {
+            linkedAccounts.put(entry.getKey(),   entry.getValue());
+            reverseLinks.put(entry.getValue(), entry.getKey());
         }
-        plugin.getLogger().info("Loaded " + linkedAccounts.size() + " linked accounts");
+        plugin.getLogger().info("Loaded " + all.size() + " linked account(s) from SQLite.");
     }
 
-    private void saveLinkedAccount(UUID uuid, String accid) {
-        plugin.getConfig().set("linked-accounts." + uuid.toString(), accid);
-        plugin.saveConfig();
-    }
-
-    private void removeLinkedAccount(UUID uuid) {
-        plugin.getConfig().set("linked-accounts." + uuid.toString(), null);
-        plugin.saveConfig();
-    }
+    // ------------------------------------------------------------------
+    // Lifecycle
+    // ------------------------------------------------------------------
 
     public void cleanup() {
         scheduler.shutdown();
@@ -145,28 +168,21 @@ public class LinkManager {
         }
     }
 
-    private static class LinkCode {
-        private final UUID playerUUID;
-        private final String playerName;
-        private final String code;
-        private final long createdAt;
+    // ------------------------------------------------------------------
+    // LinkCode — ephemeral, never written to disk
+    // ------------------------------------------------------------------
 
-        public LinkCode(UUID playerUUID, String playerName, String code) {
+    private static class LinkCode {
+        final UUID   playerUUID;
+        final String playerName;
+        final long   createdAt = System.currentTimeMillis();
+
+        LinkCode(UUID playerUUID, String playerName) {
             this.playerUUID = playerUUID;
             this.playerName = playerName;
-            this.code = code;
-            this.createdAt = System.currentTimeMillis();
         }
 
-        public UUID getPlayerUUID() {
-            return playerUUID;
-        }
-
-        public String getPlayerName() {
-            return playerName;
-        }
-
-        public boolean isExpired() {
+        boolean isExpired() {
             return System.currentTimeMillis() - createdAt > CODE_EXPIRY_MS;
         }
     }
