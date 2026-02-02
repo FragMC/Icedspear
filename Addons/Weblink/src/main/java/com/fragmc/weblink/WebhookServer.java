@@ -10,6 +10,12 @@ import com.sun.net.httpserver.HttpServer;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
+import com.stufy.fragmc.icedspear.api.IcedSpearAPI;
+import com.stufy.fragmc.icedspear.models.MapInstance;
+import com.stufy.fragmc.icedspear.models.Party;
+import org.bukkit.OfflinePlayer;
+import java.util.Set;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.StringReader;
@@ -45,12 +51,19 @@ public class WebhookServer {
         try {
             server = HttpServer.create(new InetSocketAddress(port), 0);
 
+            // Existing endpoints
             server.createContext("/webhook/check-link", new CheckLinkHandler());
             server.createContext("/webhook/verify-code", new VerifyCodeHandler());
             server.createContext("/webhook/execute-command", new ExecuteCommandHandler());
             server.createContext("/webhook/check-online", new CheckOnlineHandler());
             server.createContext("/webhook/get-command-token", new GetCommandTokenHandler());
             server.createContext("/webhook/check-admin", new CheckAdminHandler());
+
+            // NEW IcedSpear API endpoints
+            server.createContext("/webhook/get-friends", new GetPlayerFriendsHandler());
+            server.createContext("/webhook/get-party", new GetPlayerPartyHandler());
+            server.createContext("/webhook/get-map", new GetPlayerMapHandler());
+            server.createContext("/webhook/get-available-maps", new GetAvailableMapsHandler());
 
             server.setExecutor(Executors.newFixedThreadPool(4));
             server.start();
@@ -401,6 +414,233 @@ public class WebhookServer {
                 sendResponse(ex, 200, resp.toString());
             } catch (Exception e) {
                 plugin.getLogger().warning("check-admin error: " + e.getMessage());
+                sendResponse(ex, 400, errorResponse("Invalid request: " + e.getMessage()).toString());
+            }
+        }
+    }
+    class GetPlayerFriendsHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if (handlePreflight(ex)) return;
+            if (!"POST".equals(ex.getRequestMethod())) {
+                sendResponse(ex, 405, errorResponse("Method not allowed").toString());
+                return;
+            }
+
+            try {
+                JsonObject json = lenientParse(readBody(ex));
+                String uuidStr = json.get("uuid").getAsString();
+                String accid = json.get("accid").getAsString();
+                UUID playerUUID = UUID.fromString(uuidStr);
+
+                if (!plugin.getSecurityManager().verifyAccountLink(playerUUID, accid)) {
+                    sendResponse(ex, 403, errorResponse("Account not linked").toString());
+                    return;
+                }
+
+                Player player = Bukkit.getPlayer(playerUUID);
+                if (player == null) {
+                    sendResponse(ex, 400, errorResponse("Player not online").toString());
+                    return;
+                }
+
+                IcedSpearAPI api = plugin.getIcedSpearAPI();
+                Set<UUID> friends = api.getFriends(player);
+
+                JsonArray friendsArray = new JsonArray();
+                for (UUID friendId : friends) {
+                    OfflinePlayer friend = Bukkit.getOfflinePlayer(friendId);
+                    JsonObject friendObj = new JsonObject();
+                    friendObj.addProperty("uuid", friendId.toString());
+                    friendObj.addProperty("username", friend.getName());
+                    friendObj.addProperty("online", friend.isOnline());
+
+                    if (friend.isOnline()) {
+                        Player onlineFriend = (Player) friend;
+                        MapInstance map = api.getPlayerMapInstance(onlineFriend);
+                        if (map != null) {
+                            friendObj.addProperty("currentMap", map.getMapName());
+                            friendObj.addProperty("mapInstanceId", map.getInstanceId());
+                        }
+                    }
+
+                    friendsArray.add(friendObj);
+                }
+
+                JsonObject resp = new JsonObject();
+                resp.addProperty("success", true);
+                resp.add("friends", friendsArray);
+                sendResponse(ex, 200, resp.toString());
+
+            } catch (Exception e) {
+                plugin.getLogger().warning("get-friends error: " + e.getMessage());
+                sendResponse(ex, 400, errorResponse("Invalid request: " + e.getMessage()).toString());
+            }
+        }
+    }
+
+    class GetPlayerPartyHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if (handlePreflight(ex)) return;
+            if (!"POST".equals(ex.getRequestMethod())) {
+                sendResponse(ex, 405, errorResponse("Method not allowed").toString());
+                return;
+            }
+
+            try {
+                JsonObject json = lenientParse(readBody(ex));
+                String uuidStr = json.get("uuid").getAsString();
+                String accid = json.get("accid").getAsString();
+                UUID playerUUID = UUID.fromString(uuidStr);
+
+                if (!plugin.getSecurityManager().verifyAccountLink(playerUUID, accid)) {
+                    sendResponse(ex, 403, errorResponse("Account not linked").toString());
+                    return;
+                }
+
+                Player player = Bukkit.getPlayer(playerUUID);
+                if (player == null) {
+                    sendResponse(ex, 400, errorResponse("Player not online").toString());
+                    return;
+                }
+
+                IcedSpearAPI api = plugin.getIcedSpearAPI();
+                Party party = api.getPlayerParty(player);
+
+                JsonObject resp = new JsonObject();
+                resp.addProperty("success", true);
+
+                if (party != null) {
+                    resp.addProperty("inParty", true);
+                    resp.addProperty("code", party.getCode());
+                    resp.addProperty("leader", party.getLeader().toString());
+                    resp.addProperty("isLeader", party.getLeader().equals(playerUUID));
+
+                    JsonArray membersArray = new JsonArray();
+                    for (UUID memberId : party.getMembers()) {
+                        OfflinePlayer member = Bukkit.getOfflinePlayer(memberId);
+                        JsonObject memberObj = new JsonObject();
+                        memberObj.addProperty("uuid", memberId.toString());
+                        memberObj.addProperty("username", member.getName());
+                        memberObj.addProperty("online", member.isOnline());
+                        membersArray.add(memberObj);
+                    }
+                    resp.add("members", membersArray);
+
+                    if (party.getCurrentMap() != null) {
+                        resp.addProperty("currentMap", party.getCurrentMap());
+                    }
+                } else {
+                    resp.addProperty("inParty", false);
+                }
+
+                sendResponse(ex, 200, resp.toString());
+
+            } catch (Exception e) {
+                plugin.getLogger().warning("get-party error: " + e.getMessage());
+                sendResponse(ex, 400, errorResponse("Invalid request: " + e.getMessage()).toString());
+            }
+        }
+    }
+
+    class GetPlayerMapHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if (handlePreflight(ex)) return;
+            if (!"POST".equals(ex.getRequestMethod())) {
+                sendResponse(ex, 405, errorResponse("Method not allowed").toString());
+                return;
+            }
+
+            try {
+                JsonObject json = lenientParse(readBody(ex));
+                String uuidStr = json.get("uuid").getAsString();
+                String accid = json.get("accid").getAsString();
+                UUID playerUUID = UUID.fromString(uuidStr);
+
+                if (!plugin.getSecurityManager().verifyAccountLink(playerUUID, accid)) {
+                    sendResponse(ex, 403, errorResponse("Account not linked").toString());
+                    return;
+                }
+
+                Player player = Bukkit.getPlayer(playerUUID);
+                if (player == null) {
+                    sendResponse(ex, 400, errorResponse("Player not online").toString());
+                    return;
+                }
+
+                IcedSpearAPI api = plugin.getIcedSpearAPI();
+                MapInstance map = api.getPlayerMapInstance(player);
+
+                JsonObject resp = new JsonObject();
+                resp.addProperty("success", true);
+
+                if (map != null) {
+                    resp.addProperty("inMap", true);
+                    resp.addProperty("mapName", map.getMapName());
+                    resp.addProperty("instanceId", map.getInstanceId());
+                    resp.addProperty("isPublic", map.isPublic());
+                    resp.addProperty("state", map.getState().toString());
+                    resp.addProperty("playerCount", map.getPlayers().size());
+                    resp.addProperty("createdAt", map.getCreatedAt());
+                } else {
+                    resp.addProperty("inMap", false);
+                }
+
+                sendResponse(ex, 200, resp.toString());
+
+            } catch (Exception e) {
+                plugin.getLogger().warning("get-map error: " + e.getMessage());
+                sendResponse(ex, 400, errorResponse("Invalid request: " + e.getMessage()).toString());
+            }
+        }
+    }
+
+    class GetAvailableMapsHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if (handlePreflight(ex)) return;
+            if (!"POST".equals(ex.getRequestMethod())) {
+                sendResponse(ex, 405, errorResponse("Method not allowed").toString());
+                return;
+            }
+
+            try {
+                JsonObject json = lenientParse(readBody(ex));
+                String uuidStr = json.get("uuid").getAsString();
+                String accid = json.get("accid").getAsString();
+                UUID playerUUID = UUID.fromString(uuidStr);
+
+                if (!plugin.getSecurityManager().verifyAccountLink(playerUUID, accid)) {
+                    sendResponse(ex, 403, errorResponse("Account not linked").toString());
+                    return;
+                }
+
+                Player player = Bukkit.getPlayer(playerUUID);
+                if (player == null) {
+                    sendResponse(ex, 400, errorResponse("Player not online").toString());
+                    return;
+                }
+
+                IcedSpearAPI api = plugin.getIcedSpearAPI();
+                Set<String> maps = api.getAvailableMaps();
+
+                JsonArray mapsArray = new JsonArray();
+                for (String mapName : maps) {
+                    JsonObject mapObj = new JsonObject();
+                    mapObj.addProperty("name", mapName);
+                    mapObj.addProperty("canJoin", api.canPlayerJoinMap(player, mapName));
+                    mapsArray.add(mapObj);
+                }
+
+                JsonObject resp = new JsonObject();
+                resp.addProperty("success", true);
+                resp.add("maps", mapsArray);
+                sendResponse(ex, 200, resp.toString());
+
+            } catch (Exception e) {
+                plugin.getLogger().warning("get-available-maps error: " + e.getMessage());
                 sendResponse(ex, 400, errorResponse("Invalid request: " + e.getMessage()).toString());
             }
         }
