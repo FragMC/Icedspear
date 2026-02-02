@@ -3,9 +3,9 @@ package com.fragmc.weblink;
 import org.bukkit.entity.Player;
 
 import java.security.SecureRandom;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -17,8 +17,8 @@ public class LinkManager {
 
     // In-memory caches — mirrors the DB for fast lookups.
     // Every mutation writes to SQLite first; cache is updated only on success.
-    private final Map<UUID,   String> linkedAccounts; // MC UUID  → hashed ACCID
-    private final Map<String, UUID>   reverseLinks;   // hashed ACCID → MC UUID
+    private final Map<UUID,   String>       linkedAccounts; // MC UUID  → hashed ACCID
+    private final Map<String, List<UUID>>   reverseLinks;   // hashed ACCID → list of MC UUIDs
 
     // Pending (unverified) codes — ephemeral, never persisted.
     private final Map<String, LinkCode> pendingLinks;
@@ -72,6 +72,10 @@ public class LinkManager {
     /**
      * Verify a code and persist the link.
      *
+     * Rules:
+     *   - One UUID can only be linked to ONE accid (enforced here).
+     *   - One accid CAN be linked to MULTIPLE UUIDs (multi-account).
+     *
      * @param code        The 6-digit code the player received in-game.
      * @param hashedAccid The SHA-256 hex of the website ACCID
      *                    (hashing is done by the caller — see WebhookServer).
@@ -92,12 +96,25 @@ public class LinkManager {
 
         UUID playerUUID = linkCode.playerUUID;
 
+        // Block if this UUID is already linked to a DIFFERENT accid
+        String existingAccid = linkedAccounts.get(playerUUID);
+        if (existingAccid != null && !existingAccid.equals(hashedAccid)) {
+            plugin.getLogger().warning("UUID " + playerUUID + " is already linked to a different account. Unlink first.");
+            return false;
+        }
+
+        // If already linked to the same accid, it's a no-op — still return true
+        if (existingAccid != null && existingAccid.equals(hashedAccid)) {
+            plugin.getLogger().info(linkCode.playerName + " is already linked to this account.");
+            return true;
+        }
+
         // Persist first
         db.save(playerUUID, hashedAccid);
 
         // Then update caches
         linkedAccounts.put(playerUUID, hashedAccid);
-        reverseLinks.put(hashedAccid, playerUUID);
+        reverseLinks.computeIfAbsent(hashedAccid, k -> new CopyOnWriteArrayList<>()).add(playerUUID);
 
         plugin.getLogger().info("Linked hashed-ACCID to " + linkCode.playerName + " (" + playerUUID + ")");
         return true;
@@ -116,9 +133,13 @@ public class LinkManager {
         return linkedAccounts.get(playerUUID);
     }
 
-    /** Reverse lookup: hashed ACCID → MC UUID, or null. */
-    public UUID getLinkedPlayer(String hashedAccid) {
-        return reverseLinks.get(hashedAccid);
+    /**
+     * Reverse lookup: hashed ACCID → all linked MC UUIDs.
+     * Returns an empty list if nothing is linked.
+     */
+    public List<UUID> getLinkedPlayers(String hashedAccid) {
+        List<UUID> list = reverseLinks.get(hashedAccid);
+        return list != null ? Collections.unmodifiableList(list) : Collections.emptyList();
     }
 
     // ------------------------------------------------------------------
@@ -129,7 +150,15 @@ public class LinkManager {
         String accid = linkedAccounts.remove(playerUUID);
         if (accid == null) return false;
 
-        reverseLinks.remove(accid);
+        // Remove this UUID from the reverse list; remove the list entry entirely if now empty
+        List<UUID> list = reverseLinks.get(accid);
+        if (list != null) {
+            list.remove(playerUUID);
+            if (list.isEmpty()) {
+                reverseLinks.remove(accid);
+            }
+        }
+
         db.delete(playerUUID);
 
         plugin.getLogger().info("Unlinked account for " + playerUUID);
@@ -147,8 +176,9 @@ public class LinkManager {
     private void loadLinkedAccounts() {
         Map<UUID, String> all = db.loadAll();
         for (Map.Entry<UUID, String> entry : all.entrySet()) {
-            linkedAccounts.put(entry.getKey(),   entry.getValue());
-            reverseLinks.put(entry.getValue(), entry.getKey());
+            linkedAccounts.put(entry.getKey(), entry.getValue());
+            reverseLinks.computeIfAbsent(entry.getValue(), k -> new CopyOnWriteArrayList<>())
+                    .add(entry.getKey());
         }
         plugin.getLogger().info("Loaded " + all.size() + " linked account(s) from SQLite.");
     }

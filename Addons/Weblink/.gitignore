@@ -4,8 +4,8 @@ target/
 !**/src/test/**/target/
 .kotlin
 
-libs/*
-libs
+libz/*
+libz/
 
 ### IntelliJ IDEA ###
 .idea/modules.xml

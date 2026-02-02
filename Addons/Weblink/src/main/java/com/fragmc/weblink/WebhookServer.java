@@ -2,6 +2,7 @@ package com.fragmc.weblink;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonArray;
 import com.google.gson.stream.JsonReader;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -16,6 +17,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -69,7 +71,7 @@ public class WebhookServer {
 
     private static JsonObject lenientParse(String raw) {
         JsonReader reader = new JsonReader(new StringReader(raw));
-        reader.setLenient(true); // fixed from Strictness
+        reader.setLenient(true);
         return new Gson().fromJson(reader, JsonObject.class);
     }
 
@@ -78,13 +80,18 @@ public class WebhookServer {
     }
 
     private void sendResponse(HttpExchange ex, int status, String json) throws IOException {
-        byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
-
-        ex.getResponseHeaders().set("Content-Type", "application/json");
         ex.getResponseHeaders().set("Access-Control-Allow-Origin", corsOrigin);
         ex.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
         ex.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type, X-Webhook-Signature, X-Command-Token, X-Signature");
 
+        if (status == 204) {
+            ex.sendResponseHeaders(204, -1);
+            ex.getResponseBody().close();
+            return;
+        }
+
+        byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+        ex.getResponseHeaders().set("Content-Type", "application/json");
         ex.sendResponseHeaders(status, bytes.length);
         OutputStream os = ex.getResponseBody();
         os.write(bytes);
@@ -146,14 +153,12 @@ public class WebhookServer {
                 String uuidStr = json.get("uuid").getAsString();
                 UUID playerUUID = UUID.fromString(uuidStr);
 
-                // Validate player is online & linked
                 Player player = Bukkit.getPlayer(playerUUID);
                 if (player == null) {
                     sendResponse(ex, 400, errorResponse("Player not online").toString());
                     return;
                 }
 
-                // Generate token
                 String token = generateToken(playerUUID);
 
                 JsonObject resp = new JsonObject();
@@ -170,6 +175,22 @@ public class WebhookServer {
         }
     }
 
+    /**
+     * check-link: given a hashed accid, returns whether any accounts are linked
+     * and the full list of linked accounts with their online status.
+     *
+     * Response shape:
+     * {
+     *   "success": true,
+     *   "linked": true,
+     *   "uuid": "<first linked uuid>",           // kept for backward compat
+     *   "username": "<first linked username>",    // kept for backward compat
+     *   "accounts": [
+     *     { "uuid": "...", "username": "...", "online": true/false },
+     *     ...
+     *   ]
+     * }
+     */
     class CheckLinkHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange ex) throws IOException {
@@ -182,15 +203,41 @@ public class WebhookServer {
             try {
                 JsonObject json = lenientParse(readBody(ex));
                 String accid = json.get("accid").getAsString();
-                UUID linked = plugin.getLinkManager().getLinkedPlayer(accid);
+
+                // Get ALL UUIDs linked to this accid
+                List<UUID> linkedUuids = plugin.getDatabase().getAllUuidsByAccid(accid);
 
                 JsonObject resp = new JsonObject();
                 resp.addProperty("success", true);
-                resp.addProperty("linked", linked != null);
-                if (linked != null) {
-                    resp.addProperty("uuid", linked.toString());
-                    Player p = Bukkit.getPlayer(linked);
-                    if (p != null) resp.addProperty("username", p.getName());
+                resp.addProperty("linked", !linkedUuids.isEmpty());
+
+                if (!linkedUuids.isEmpty()) {
+                    // Primary account (first one)
+                    UUID primaryUuid = linkedUuids.get(0);
+                    resp.addProperty("uuid", primaryUuid.toString());
+                    Player p = Bukkit.getPlayer(primaryUuid);
+                    if (p != null) {
+                        resp.addProperty("username", p.getName());
+                    } else {
+                        resp.addProperty("username", primaryUuid.toString());
+                    }
+
+                    // All accounts array
+                    JsonArray accountsArray = new JsonArray();
+                    for (UUID uuid : linkedUuids) {
+                        JsonObject acc = new JsonObject();
+                        acc.addProperty("uuid", uuid.toString());
+                        Player player = Bukkit.getPlayer(uuid);
+                        if (player != null) {
+                            acc.addProperty("username", player.getName());
+                            acc.addProperty("online", true);
+                        } else {
+                            acc.addProperty("username", uuid.toString());
+                            acc.addProperty("online", false);
+                        }
+                        accountsArray.add(acc);
+                    }
+                    resp.add("accounts", accountsArray);
                 }
 
                 sendResponse(ex, 200, resp.toString());
@@ -311,6 +358,7 @@ public class WebhookServer {
             }
         }
     }
+
     class CheckAdminHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange ex) throws IOException {
@@ -330,13 +378,11 @@ public class WebhookServer {
 
                 UUID playerUUID = UUID.fromString(uuidStr);
 
-                // verify link (plugin should store hashed accid)
                 if (!plugin.getSecurityManager().verifyAccountLink(playerUUID, accid)) {
                     sendResponse(ex, 403, errorResponse("Account not linked").toString());
                     return;
                 }
 
-                // check permission
                 Player player = Bukkit.getPlayer(playerUUID);
                 boolean isAdmin = false;
                 String username = null;
