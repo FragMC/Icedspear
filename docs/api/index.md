@@ -58,7 +58,7 @@ The IcedSpear API allows developers to create addons that interact with IcedSpea
 
 #### Gradle
 
-```gradle
+```groovy
 dependencies {
     compileOnly 'com.stufy.fragmc:icedspear:1.2.0'
 }
