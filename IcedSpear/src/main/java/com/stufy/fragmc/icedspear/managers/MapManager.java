@@ -81,28 +81,45 @@ public class MapManager {
             worldCreator.generator(new org.bukkit.generator.ChunkGenerator() {
                 @Override
                 public void generateNoise(org.bukkit.generator.WorldInfo worldInfo,
-                                          Random random, int chunkX, int chunkZ,
-                                          org.bukkit.generator.ChunkGenerator.ChunkData chunkData) {
+                        Random random, int chunkX, int chunkZ,
+                        org.bukkit.generator.ChunkGenerator.ChunkData chunkData) {
                 }
 
                 @Override
                 public void generateSurface(org.bukkit.generator.WorldInfo worldInfo,
-                                            Random random, int chunkX, int chunkZ,
-                                            org.bukkit.generator.ChunkGenerator.ChunkData chunkData) {
+                        Random random, int chunkX, int chunkZ,
+                        org.bukkit.generator.ChunkGenerator.ChunkData chunkData) {
                 }
 
                 @Override
-                public boolean shouldGenerateNoise() { return false; }
+                public boolean shouldGenerateNoise() {
+                    return false;
+                }
+
                 @Override
-                public boolean shouldGenerateSurface() { return false; }
+                public boolean shouldGenerateSurface() {
+                    return false;
+                }
+
                 @Override
-                public boolean shouldGenerateCaves() { return false; }
+                public boolean shouldGenerateCaves() {
+                    return false;
+                }
+
                 @Override
-                public boolean shouldGenerateDecorations() { return false; }
+                public boolean shouldGenerateDecorations() {
+                    return false;
+                }
+
                 @Override
-                public boolean shouldGenerateMobs() { return false; }
+                public boolean shouldGenerateMobs() {
+                    return false;
+                }
+
                 @Override
-                public boolean shouldGenerateStructures() { return false; }
+                public boolean shouldGenerateStructures() {
+                    return false;
+                }
             });
 
             World world = worldCreator.createWorld();
@@ -115,7 +132,8 @@ public class MapManager {
                 if (!worldExists) {
                     pasteSchematic(instance);
                 } else {
-                    plugin.getLogger().info("Map world " + instance.getInstanceId() + " already exists. Skipping schematic paste.");
+                    plugin.getLogger().info(
+                            "Map world " + instance.getInstanceId() + " already exists. Skipping schematic paste.");
                     scanForGoldBlock(instance, new Location(world, 0, 100, 0));
                 }
 
@@ -134,7 +152,8 @@ public class MapManager {
                     && instance.getPlayers().isEmpty()
                     && instance.getWaitingPlayers().isEmpty()) {
 
-                plugin.getLogger().info("Map " + instance.getInstanceId() + " had no players join within " + delay + " seconds. Destroying.");
+                plugin.getLogger().info("Map " + instance.getInstanceId() + " had no players join within " + delay
+                        + " seconds. Destroying.");
                 destroyMap(instance.getInstanceId());
             }
         }, delay * 20L);
@@ -206,7 +225,8 @@ public class MapManager {
                 plugin.getLogger().warning("No gold block found in schematic! Using default spawn location.");
             }
 
-            Location finalGoldLocation = goldBlockLocation != null ? goldBlockLocation : pasteLocation.clone().add(0, 1, 0);
+            Location finalGoldLocation = goldBlockLocation != null ? goldBlockLocation
+                    : pasteLocation.clone().add(0, 1, 0);
 
             Bukkit.getScheduler().runTask(plugin, () -> {
                 instance.setSpawnLocation(finalGoldLocation);
@@ -236,14 +256,16 @@ public class MapManager {
                             player.teleportAsync(finalGoldLocation).thenAccept(success -> {
                                 if (success) {
                                     player.setGameMode(configManager.getDefaultGameMode());
-                                    player.sendMessage(ChatColor.GREEN + "Map is ready! Welcome to " + instance.getMapName() + "!");
+                                    player.sendMessage(ChatColor.GREEN + "Map is ready! Welcome to "
+                                            + instance.getMapName() + "!");
                                     configManager.executeOnJoinCommands(player);
                                 }
                             });
                         } catch (NoSuchMethodError e) {
                             player.teleport(finalGoldLocation);
                             player.setGameMode(configManager.getDefaultGameMode());
-                            player.sendMessage(ChatColor.GREEN + "Map is ready! Welcome to " + instance.getMapName() + "!");
+                            player.sendMessage(
+                                    ChatColor.GREEN + "Map is ready! Welcome to " + instance.getMapName() + "!");
                             configManager.executeOnJoinCommands(player);
                         }
                     }
@@ -270,7 +292,8 @@ public class MapManager {
         }
 
         if (instance.getState() == MapState.CREATING) {
-            player.sendMessage(ChatColor.YELLOW + "Please be patient. It is taking longer than usual to join/prepare the map. Please contact an admin if this issue persists.");
+            player.sendMessage(ChatColor.YELLOW
+                    + "Please be patient. It is taking longer than usual to join/prepare the map. Please contact an admin if this issue persists.");
             instance.addWaitingPlayer(player.getUniqueId());
             return true;
         }
@@ -355,7 +378,8 @@ public class MapManager {
                 instance.setState(MapState.ENDING);
 
                 long cleanupDelay = configManager.getCleanupDelay();
-                plugin.getLogger().info("Map " + instanceId + " is empty. Scheduling deletion in " + cleanupDelay + " seconds.");
+                plugin.getLogger()
+                        .info("Map " + instanceId + " is empty. Scheduling deletion in " + cleanupDelay + " seconds.");
 
                 Bukkit.getScheduler().runTaskLater(plugin, () -> {
                     if (instance.getPlayers().isEmpty() && instance.getWaitingPlayers().isEmpty()) {

@@ -280,7 +280,8 @@ public class SchematicManager {
 
         if (!sourceFile.exists()) {
             plugin.getLogger().warning("Schematic not found in FAWE or WorldEdit folders: " + worldEditName);
-            plugin.getLogger().warning("Checked: plugins/FastAsyncWorldEdit/schematics/ and plugins/WorldEdit/schematics/");
+            plugin.getLogger()
+                    .warning("Checked: plugins/FastAsyncWorldEdit/schematics/ and plugins/WorldEdit/schematics/");
             return false;
         }
 
