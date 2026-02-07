@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitepress'
 
 export default defineConfig({
+  base: '/iced-spear/',
   title: "IcedSpear",
   description: "FragMC Core Plugin Documentation",
   themeConfig: {
