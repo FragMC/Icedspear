@@ -10,6 +10,7 @@ public class WebLinkAddon extends JavaPlugin {
     private static WebLinkAddon instance;
 
     private IcedSpearAPI    icedSpearAPI;
+    private Object          frostAPI;
     private Database        database;
     private LinkManager     linkManager;
     private SecurityManager securityManager;
@@ -20,26 +21,29 @@ public class WebLinkAddon extends JavaPlugin {
         instance = this;
         saveDefaultConfig();
 
-        // 1. IcedSpear
+        // 1. IcedSpear (required)
         if (!setupIcedSpear()) {
             getLogger().severe("IcedSpear not found! Disabling WebLink.");
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
 
-        // 2. SQLite — creates the DB file inside the plugin data folder if it doesn't exist
+        // 2. Frost (optional)
+        setupFrost();
+
+        // 3. SQLite — creates the DB file inside the plugin data folder if it doesn't exist
         database = new Database(this);
 
-        // 3. Security (reads webhook-secret from config)
+        // 4. Security (reads webhook-secret from config)
         securityManager = new SecurityManager(this);
 
-        // 4. LinkManager — loads existing rows from SQLite into memory
+        // 5. LinkManager — loads existing rows from SQLite into memory
         linkManager = new LinkManager(this, database);
 
-        // 5. Commands
+        // 6. Commands
         getCommand("weblink").setExecutor(new WebLinkCommand(this));
 
-        // 6. Webhook HTTP server
+        // 7. Webhook HTTP server
         webhookServer = new WebhookServer(this);
         webhookServer.start();
 
@@ -66,9 +70,26 @@ public class WebLinkAddon extends JavaPlugin {
         return false;
     }
 
+    private void setupFrost() {
+        try {
+            Class<?> frostApiClass = Class.forName("com.stufy.fragmc.frost.api.FrostAPI");
+            Object api = Bukkit.getServicesManager().load(frostApiClass);
+            if (api != null) {
+                frostAPI = api;
+                getLogger().info("Frost detected. Frost webhooks are enabled.");
+            } else {
+                getLogger().info("Frost not found via ServicesManager. Frost webhooks will be disabled.");
+            }
+        } catch (ClassNotFoundException e) {
+            getLogger().info("Frost not installed (FrostAPI class not found). Frost webhooks will be disabled.");
+        }
+    }
+
     // Accessors
     public static WebLinkAddon getInstance()     { return instance; }
     public IcedSpearAPI    getIcedSpearAPI()     { return icedSpearAPI; }
+    public Object          getFrostAPI()         { return frostAPI; }
+    public boolean         hasFrost()            { return frostAPI != null; }
     public Database        getDatabase()         { return database; }
     public LinkManager     getLinkManager()      { return linkManager; }
     public SecurityManager getSecurityManager()  { return securityManager; }

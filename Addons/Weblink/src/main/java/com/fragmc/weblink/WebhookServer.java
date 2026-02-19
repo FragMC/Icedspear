@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
+import java.lang.reflect.Method;
 
 public class WebhookServer {
 
@@ -65,6 +66,13 @@ public class WebhookServer {
             server.createContext("/webhook/get-map", new GetPlayerMapHandler());
             server.createContext("/webhook/get-available-maps", new GetAvailableMapsHandler());
 
+            // Optional Frost API endpoints
+            server.createContext("/webhook/frost/get-owned", new FrostGetOwnedCosmeticsHandler());
+            server.createContext("/webhook/frost/get-equipped", new FrostGetEquippedCosmeticsHandler());
+            server.createContext("/webhook/frost/owns-cosmetic", new FrostOwnsCosmeticHandler());
+            server.createContext("/webhook/frost/purchase-cosmetic", new FrostPurchaseCosmeticHandler());
+            server.createContext("/webhook/frost/get-store", new FrostGetStoreHandler());
+
             server.setExecutor(Executors.newFixedThreadPool(4));
             server.start();
             plugin.getLogger().info("Webhook server started on port " + port);
@@ -95,7 +103,8 @@ public class WebhookServer {
     private void sendResponse(HttpExchange ex, int status, String json) throws IOException {
         ex.getResponseHeaders().set("Access-Control-Allow-Origin", corsOrigin);
         ex.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-        ex.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type, X-Webhook-Signature, X-Command-Token, X-Signature");
+        ex.getResponseHeaders().set("Access-Control-Allow-Headers",
+                "Content-Type, X-Webhook-Signature, X-Command-Token, X-Signature");
 
         if (status == 204) {
             ex.sendResponseHeaders(204, -1);
@@ -155,7 +164,8 @@ public class WebhookServer {
     class GetCommandTokenHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange ex) throws IOException {
-            if (handlePreflight(ex)) return;
+            if (handlePreflight(ex))
+                return;
             if (!"POST".equals(ex.getRequestMethod())) {
                 sendResponse(ex, 405, errorResponse("Method not allowed").toString());
                 return;
@@ -194,20 +204,21 @@ public class WebhookServer {
      *
      * Response shape:
      * {
-     *   "success": true,
-     *   "linked": true,
-     *   "uuid": "<first linked uuid>",           // kept for backward compat
-     *   "username": "<first linked username>",    // kept for backward compat
-     *   "accounts": [
-     *     { "uuid": "...", "username": "...", "online": true/false },
-     *     ...
-     *   ]
+     * "success": true,
+     * "linked": true,
+     * "uuid": "<first linked uuid>", // kept for backward compat
+     * "username": "<first linked username>", // kept for backward compat
+     * "accounts": [
+     * { "uuid": "...", "username": "...", "online": true/false },
+     * ...
+     * ]
      * }
      */
     class CheckLinkHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange ex) throws IOException {
-            if (handlePreflight(ex)) return;
+            if (handlePreflight(ex))
+                return;
             if (!"POST".equals(ex.getRequestMethod())) {
                 sendResponse(ex, 405, errorResponse("Method not allowed").toString());
                 return;
@@ -264,7 +275,8 @@ public class WebhookServer {
     class VerifyCodeHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange ex) throws IOException {
-            if (handlePreflight(ex)) return;
+            if (handlePreflight(ex))
+                return;
             if (!"POST".equals(ex.getRequestMethod())) {
                 sendResponse(ex, 405, errorResponse("Method not allowed").toString());
                 return;
@@ -294,7 +306,8 @@ public class WebhookServer {
     class ExecuteCommandHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange ex) throws IOException {
-            if (handlePreflight(ex)) return;
+            if (handlePreflight(ex))
+                return;
             if (!"POST".equals(ex.getRequestMethod())) {
                 sendResponse(ex, 405, errorResponse("Method not allowed").toString());
                 return;
@@ -340,7 +353,8 @@ public class WebhookServer {
     class CheckOnlineHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange ex) throws IOException {
-            if (handlePreflight(ex)) return;
+            if (handlePreflight(ex))
+                return;
             if (!"POST".equals(ex.getRequestMethod())) {
                 sendResponse(ex, 405, errorResponse("Method not allowed").toString());
                 return;
@@ -361,7 +375,8 @@ public class WebhookServer {
                 JsonObject resp = new JsonObject();
                 resp.addProperty("success", true);
                 resp.addProperty("online", p != null);
-                if (p != null) resp.addProperty("username", p.getName());
+                if (p != null)
+                    resp.addProperty("username", p.getName());
 
                 sendResponse(ex, 200, resp.toString());
 
@@ -375,7 +390,8 @@ public class WebhookServer {
     class CheckAdminHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange ex) throws IOException {
-            if (handlePreflight(ex)) return;
+            if (handlePreflight(ex))
+                return;
 
             if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
                 sendResponse(ex, 405, errorResponse("Method not allowed").toString());
@@ -418,10 +434,12 @@ public class WebhookServer {
             }
         }
     }
+
     class GetPlayerFriendsHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange ex) throws IOException {
-            if (handlePreflight(ex)) return;
+            if (handlePreflight(ex))
+                return;
             if (!"POST".equals(ex.getRequestMethod())) {
                 sendResponse(ex, 405, errorResponse("Method not allowed").toString());
                 return;
@@ -482,7 +500,8 @@ public class WebhookServer {
     class GetPlayerPartyHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange ex) throws IOException {
-            if (handlePreflight(ex)) return;
+            if (handlePreflight(ex))
+                return;
             if (!"POST".equals(ex.getRequestMethod())) {
                 sendResponse(ex, 405, errorResponse("Method not allowed").toString());
                 return;
@@ -547,7 +566,8 @@ public class WebhookServer {
     class GetPlayerMapHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange ex) throws IOException {
-            if (handlePreflight(ex)) return;
+            if (handlePreflight(ex))
+                return;
             if (!"POST".equals(ex.getRequestMethod())) {
                 sendResponse(ex, 405, errorResponse("Method not allowed").toString());
                 return;
@@ -600,7 +620,8 @@ public class WebhookServer {
     class GetAvailableMapsHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange ex) throws IOException {
-            if (handlePreflight(ex)) return;
+            if (handlePreflight(ex))
+                return;
             if (!"POST".equals(ex.getRequestMethod())) {
                 sendResponse(ex, 405, errorResponse("Method not allowed").toString());
                 return;
@@ -641,6 +662,328 @@ public class WebhookServer {
 
             } catch (Exception e) {
                 plugin.getLogger().warning("get-available-maps error: " + e.getMessage());
+                sendResponse(ex, 400, errorResponse("Invalid request: " + e.getMessage()).toString());
+            }
+        }
+    }
+
+    // -------------------- Frost integration (optional) --------------------
+
+    class FrostGetOwnedCosmeticsHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if (handlePreflight(ex))
+                return;
+            if (!"POST".equals(ex.getRequestMethod())) {
+                sendResponse(ex, 405, errorResponse("Method not allowed").toString());
+                return;
+            }
+
+            try {
+                JsonObject json = lenientParse(readBody(ex));
+                String uuidStr = json.get("uuid").getAsString();
+                String accid = json.get("accid").getAsString();
+                UUID playerUUID = UUID.fromString(uuidStr);
+
+                if (!plugin.getSecurityManager().verifyAccountLink(playerUUID, accid)) {
+                    sendResponse(ex, 403, errorResponse("Account not linked").toString());
+                    return;
+                }
+
+                if (!plugin.hasFrost()) {
+                    sendResponse(ex, 503, errorResponse("Frost is not installed").toString());
+                    return;
+                }
+
+                Player player = Bukkit.getPlayer(playerUUID);
+                if (player == null) {
+                    sendResponse(ex, 400, errorResponse("Player not online").toString());
+                    return;
+                }
+
+                Object frostApi = plugin.getFrostAPI();
+                Class<?> apiClass = frostApi.getClass();
+                Method method = apiClass.getMethod("getOwnedCosmetics", Player.class);
+                Set<?> owned = (Set<?>) method.invoke(frostApi, player);
+
+                JsonArray ownedArray = new JsonArray();
+                for (Object id : owned) {
+                    if (id != null) {
+                        ownedArray.add(id.toString());
+                    }
+                }
+
+                JsonObject resp = new JsonObject();
+                resp.addProperty("success", true);
+                resp.add("owned", ownedArray);
+                sendResponse(ex, 200, resp.toString());
+
+            } catch (Exception e) {
+                plugin.getLogger().warning("frost get-owned error: " + e.getMessage());
+                sendResponse(ex, 400, errorResponse("Invalid request: " + e.getMessage()).toString());
+            }
+        }
+    }
+
+    class FrostGetEquippedCosmeticsHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if (handlePreflight(ex))
+                return;
+            if (!"POST".equals(ex.getRequestMethod())) {
+                sendResponse(ex, 405, errorResponse("Method not allowed").toString());
+                return;
+            }
+
+            try {
+                JsonObject json = lenientParse(readBody(ex));
+                String uuidStr = json.get("uuid").getAsString();
+                String accid = json.get("accid").getAsString();
+                UUID playerUUID = UUID.fromString(uuidStr);
+
+                if (!plugin.getSecurityManager().verifyAccountLink(playerUUID, accid)) {
+                    sendResponse(ex, 403, errorResponse("Account not linked").toString());
+                    return;
+                }
+
+                if (!plugin.hasFrost()) {
+                    sendResponse(ex, 503, errorResponse("Frost is not installed").toString());
+                    return;
+                }
+
+                Player player = Bukkit.getPlayer(playerUUID);
+                if (player == null) {
+                    sendResponse(ex, 400, errorResponse("Player not online").toString());
+                    return;
+                }
+
+                Object frostApi = plugin.getFrostAPI();
+                Class<?> apiClass = frostApi.getClass();
+                Method method = apiClass.getMethod("getEquippedCosmetics", Player.class);
+                @SuppressWarnings("unchecked")
+                Map<Object, Object> equipped = (Map<Object, Object>) method.invoke(frostApi, player);
+
+                JsonObject equippedObj = new JsonObject();
+                for (Map.Entry<Object, Object> entry : equipped.entrySet()) {
+                    if (entry.getKey() != null && entry.getValue() != null) {
+                        equippedObj.addProperty(entry.getKey().toString(), entry.getValue().toString());
+                    }
+                }
+
+                JsonObject resp = new JsonObject();
+                resp.addProperty("success", true);
+                resp.add("equipped", equippedObj);
+                sendResponse(ex, 200, resp.toString());
+
+            } catch (Exception e) {
+                plugin.getLogger().warning("frost get-equipped error: " + e.getMessage());
+                sendResponse(ex, 400, errorResponse("Invalid request: " + e.getMessage()).toString());
+            }
+        }
+    }
+
+    class FrostOwnsCosmeticHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if (handlePreflight(ex))
+                return;
+            if (!"POST".equals(ex.getRequestMethod())) {
+                sendResponse(ex, 405, errorResponse("Method not allowed").toString());
+                return;
+            }
+
+            try {
+                JsonObject json = lenientParse(readBody(ex));
+                String uuidStr = json.get("uuid").getAsString();
+                String accid = json.get("accid").getAsString();
+                String cosmeticId = json.get("cosmeticId").getAsString();
+                UUID playerUUID = UUID.fromString(uuidStr);
+
+                if (!plugin.getSecurityManager().verifyAccountLink(playerUUID, accid)) {
+                    sendResponse(ex, 403, errorResponse("Account not linked").toString());
+                    return;
+                }
+
+                if (!plugin.hasFrost()) {
+                    sendResponse(ex, 503, errorResponse("Frost is not installed").toString());
+                    return;
+                }
+
+                Player player = Bukkit.getPlayer(playerUUID);
+                if (player == null) {
+                    sendResponse(ex, 400, errorResponse("Player not online").toString());
+                    return;
+                }
+
+                Object frostApi = plugin.getFrostAPI();
+                Class<?> apiClass = frostApi.getClass();
+                Method method = apiClass.getMethod("playerOwnsCosmetic", Player.class, String.class);
+                boolean owns = (boolean) method.invoke(frostApi, player, cosmeticId);
+
+                JsonObject resp = new JsonObject();
+                resp.addProperty("success", true);
+                resp.addProperty("owns", owns);
+                sendResponse(ex, 200, resp.toString());
+
+            } catch (Exception e) {
+                plugin.getLogger().warning("frost owns-cosmetic error: " + e.getMessage());
+                sendResponse(ex, 400, errorResponse("Invalid request: " + e.getMessage()).toString());
+            }
+        }
+    }
+
+    class FrostPurchaseCosmeticHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if (handlePreflight(ex))
+                return;
+            if (!"POST".equals(ex.getRequestMethod())) {
+                sendResponse(ex, 405, errorResponse("Method not allowed").toString());
+                return;
+            }
+
+            try {
+                JsonObject json = lenientParse(readBody(ex));
+                String uuidStr = json.get("uuid").getAsString();
+                String accid = json.get("accid").getAsString();
+                String cosmeticId = json.get("cosmeticId").getAsString();
+                UUID playerUUID = UUID.fromString(uuidStr);
+
+                if (!plugin.getSecurityManager().verifyAccountLink(playerUUID, accid)) {
+                    sendResponse(ex, 403, errorResponse("Account not linked").toString());
+                    return;
+                }
+
+                if (!plugin.hasFrost()) {
+                    sendResponse(ex, 503, errorResponse("Frost is not installed").toString());
+                    return;
+                }
+
+                Player player = Bukkit.getPlayer(playerUUID);
+                if (player == null) {
+                    sendResponse(ex, 400, errorResponse("Player not online").toString());
+                    return;
+                }
+
+                Object frostApi = plugin.getFrostAPI();
+                Class<?> apiClass = frostApi.getClass();
+                Method method = apiClass.getMethod("purchaseCosmetic", Player.class, String.class);
+                boolean purchased = (boolean) method.invoke(frostApi, player, cosmeticId);
+
+                JsonObject resp = new JsonObject();
+                resp.addProperty("success", purchased);
+                sendResponse(ex, 200, resp.toString());
+
+            } catch (Exception e) {
+                plugin.getLogger().warning("frost purchase-cosmetic error: " + e.getMessage());
+                sendResponse(ex, 400, errorResponse("Invalid request: " + e.getMessage()).toString());
+            }
+        }
+    }
+
+    class FrostGetStoreHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange ex) throws IOException {
+            if (handlePreflight(ex))
+                return;
+            if (!"POST".equals(ex.getRequestMethod())) {
+                sendResponse(ex, 405, errorResponse("Method not allowed").toString());
+                return;
+            }
+
+            try {
+                JsonObject json = lenientParse(readBody(ex));
+                String uuidStr = json.get("uuid").getAsString();
+                String accid = json.get("accid").getAsString();
+                String categoryId = json.has("categoryId") ? json.get("categoryId").getAsString() : null;
+                UUID playerUUID = UUID.fromString(uuidStr);
+
+                if (!plugin.getSecurityManager().verifyAccountLink(playerUUID, accid)) {
+                    sendResponse(ex, 403, errorResponse("Account not linked").toString());
+                    return;
+                }
+
+                if (!plugin.hasFrost()) {
+                    sendResponse(ex, 503, errorResponse("Frost is not installed").toString());
+                    return;
+                }
+
+                Player player = Bukkit.getPlayer(playerUUID);
+                if (player == null) {
+                    sendResponse(ex, 400, errorResponse("Player not online").toString());
+                    return;
+                }
+
+                Object frostApi = plugin.getFrostAPI();
+                Class<?> apiClass = frostApi.getClass();
+
+                List<?> store;
+                if (categoryId != null && !categoryId.isEmpty()) {
+                    Method m = apiClass.getMethod("getStoreCosmeticsInCategory", Player.class, String.class);
+                    store = (List<?>) m.invoke(frostApi, player, categoryId);
+                } else {
+                    Method m = apiClass.getMethod("getStoreCosmetics", Player.class);
+                    store = (List<?>) m.invoke(frostApi, player);
+                }
+
+                JsonArray items = new JsonArray();
+                for (Object cosmetic : store) {
+                    if (cosmetic == null)
+                        continue;
+                    JsonObject obj = new JsonObject();
+                    Class<?> c = cosmetic.getClass();
+
+                    try {
+                        Method getId = c.getMethod("getId");
+                        Object id = getId.invoke(cosmetic);
+                        if (id != null)
+                            obj.addProperty("id", id.toString());
+                    } catch (NoSuchMethodException ignored) {
+                    }
+
+                    try {
+                        Method getDisplayName = c.getMethod("getDisplayName");
+                        Object name = getDisplayName.invoke(cosmetic);
+                        if (name != null)
+                            obj.addProperty("displayName", name.toString());
+                    } catch (NoSuchMethodException ignored) {
+                    }
+
+                    try {
+                        Method getDescription = c.getMethod("getDescription");
+                        Object desc = getDescription.invoke(cosmetic);
+                        if (desc != null)
+                            obj.addProperty("description", desc.toString());
+                    } catch (NoSuchMethodException ignored) {
+                    }
+
+                    try {
+                        Method getCategoryId = c.getMethod("getCategoryId");
+                        Object cat = getCategoryId.invoke(cosmetic);
+                        if (cat != null)
+                            obj.addProperty("categoryId", cat.toString());
+                    } catch (NoSuchMethodException ignored) {
+                    }
+
+                    try {
+                        Method getPrice = c.getMethod("getPrice");
+                        Object price = getPrice.invoke(cosmetic);
+                        if (price instanceof Number n) {
+                            obj.addProperty("price", n.doubleValue());
+                        }
+                    } catch (NoSuchMethodException ignored) {
+                    }
+
+                    items.add(obj);
+                }
+
+                JsonObject resp = new JsonObject();
+                resp.addProperty("success", true);
+                resp.add("store", items);
+                sendResponse(ex, 200, resp.toString());
+
+            } catch (Exception e) {
+                plugin.getLogger().warning("frost get-store error: " + e.getMessage());
                 sendResponse(ex, 400, errorResponse("Invalid request: " + e.getMessage()).toString());
             }
         }
