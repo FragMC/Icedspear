@@ -1,0 +1,21 @@
+name: IcedScores
+version: '${project.version}'
+main: com.stufy.fragmc.icedscore.IcedScores
+api-version: '1.21'
+description: ImageFrame leaderboard displays powered by IcedSpear
+authors: [ ]
+depend:
+  - IcedSpear
+  - ImageFrame
+
+commands:
+  icedscore:
+    description: IcedScores main command
+    aliases: [ is, iscores ]
+    usage: /icedscore <help|create|delete|list|reload>
+    permission: icedscore.admin
+
+permissions:
+  icedscore.admin:
+    description: Access to all IcedScores commands
+    default: op

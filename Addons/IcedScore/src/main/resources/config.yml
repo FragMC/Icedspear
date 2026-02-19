@@ -1,0 +1,142 @@
+# IcedScores Configuration
+# Full documentation: https://github.com/FragMC/IcedSpear
+
+# How often to refresh leaderboard images (in ticks, 20 ticks = 1 second)
+refresh-interval: 100
+
+# ─────────────────────────────────────────────
+#  LEADERBOARD DEFINITIONS
+#  Each key under `leaderboards:` is a unique ID you choose.
+# ─────────────────────────────────────────────
+leaderboards:
+
+  # Example leaderboard - edit or duplicate this block
+  snowfall:
+
+    # The IcedSpear map name to pull times from
+    map-name: "Snowfall"
+
+    # How many entries to show
+    entries: 10
+
+    # The ImageFrame map name (set with /imageframe create <name> in-game)
+    imageframe-map: "snowfall_board"
+
+    # Map size in Minecraft map units (1 unit = 128px)
+    # 1x1 = 128x128px, 2x3 = 256x384px, etc.
+    map-width: 1
+    map-height: 2
+
+    # ── Title ─────────────────────────────────
+    title:
+      text: "❄ Snowfall Times"
+      font: "Minecraft"          # Font name (see fonts section below)
+      font-size: 16
+      bold: true
+      italic: false
+      color: "#FFD700"           # Hex color
+      shadow: true
+      shadow-color: "#7F6500"
+      align: "CENTER"            # LEFT | CENTER | RIGHT
+
+    # ── Background ────────────────────────────
+    background:
+      color: "#1A1A2E"           # Main fill color
+      opacity: 220               # 0-255
+      # Optional gradient (set enabled: false to disable)
+      gradient:
+        enabled: true
+        top-color: "#16213E"
+        bottom-color: "#0F3460"
+      # Optional border around the whole image
+      border:
+        enabled: true
+        color: "#4FC3F7"
+        thickness: 3
+        corner-radius: 8
+
+    # ── Column layout ─────────────────────────
+    columns:
+      rank:
+        enabled: true
+        header: "#"
+        width-percent: 10        # % of total map width
+        color: "#90CAF9"
+        font: "Minecraft"
+        font-size: 11
+        bold: false
+      player:
+        enabled: true
+        header: "Player"
+        width-percent: 50
+        color: "#FFFFFF"
+        font: "Minecraft"
+        font-size: 11
+        bold: false
+      time:
+        enabled: true
+        header: "Time"
+        width-percent: 40
+        color: "#A5D6A7"
+        font: "Minecraft"
+        font-size: 11
+        bold: false
+
+    # ── Row styling ───────────────────────────
+    rows:
+      padding: 4                 # Pixels between rows
+      # Alternating row background colors (set enabled: false for none)
+      alternating:
+        enabled: true
+        even-color: "#00000000"  # Transparent
+        odd-color: "#15FFFFFF"   # Slightly lighter (ARGB hex)
+      # Highlight the top N entries differently
+      podium:
+        enabled: true
+        colors:
+          1: "#FFD700"           # Gold
+          2: "#C0C0C0"           # Silver
+          3: "#CD7F32"           # Bronze
+      # Separator line between rows
+      separator:
+        enabled: false
+        color: "#333355"
+        thickness: 1
+
+    # ── Header row ────────────────────────────
+    header-row:
+      enabled: true
+      background-color: "#0D1B2A"
+      color: "#64B5F6"
+      font-size: 10
+      bold: true
+      separator:
+        enabled: true
+        color: "#4FC3F7"
+        thickness: 2
+
+    # ── Footer ────────────────────────────────
+    footer:
+      enabled: true
+      text: "Updated: {time}"   # {time} = last refresh time
+      color: "#546E7A"
+      font-size: 8
+      italic: true
+      align: "RIGHT"
+
+    # ── Padding (inner margins) ────────────────
+    padding:
+      top: 8
+      bottom: 8
+      left: 10
+      right: 10
+
+# ─────────────────────────────────────────────
+#  FONT REGISTRY
+#  Name your fonts and point to .ttf files in the plugin's fonts/ folder.
+#  "Minecraft" is bundled by default.
+#  Add your own .ttf files to plugins/IcedScores/fonts/
+# ─────────────────────────────────────────────
+fonts:
+  Minecraft: "minecraft.ttf"
+  # Custom: "mycustomfont.ttf"
