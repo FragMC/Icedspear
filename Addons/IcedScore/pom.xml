@@ -12,6 +12,14 @@
     <name>IcedScores</name>
     <description>ImageFrame-powered leaderboard displays using IcedSpear</description>
 
+    <distributionManagement>
+        <repository>
+            <id>github</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/FragMC/Icedspear</url>
+        </repository>
+    </distributionManagement>
+
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
@@ -26,6 +34,11 @@
         <repository>
             <id>modrinth</id>
             <url>https://api.modrinth.com/maven</url>
+        </repository>
+        <repository>
+            <id>github</id>
+            <name>GitHub Packages - FragMC</name>
+            <url>https://maven.pkg.github.com/FragMC/Icedspear</url>
         </repository>
     </repositories>
 
@@ -42,7 +55,7 @@
         <dependency>
             <groupId>maven.modrinth</groupId>
             <artifactId>icedspear</artifactId>
-            <version>LATEST</version>
+            <version>1.3.2</version>
             <scope>provided</scope>
         </dependency>
 

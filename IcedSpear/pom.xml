@@ -11,6 +11,14 @@
 
     <name>IcedSpear</name>
 
+    <distributionManagement>
+        <repository>
+            <id>github</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/FragMC/Icedspear</url>
+        </repository>
+    </distributionManagement>
+
     <properties>
         <java.version>21</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -57,6 +65,12 @@
         <repository>
             <id>enginehub-maven</id>
             <url>https://maven.enginehub.org/repo/</url>
+        </repository>
+        <!-- GitHub Packages - FragMC internal dependencies -->
+        <repository>
+            <id>github</id>
+            <name>GitHub Packages - FragMC</name>
+            <url>https://maven.pkg.github.com/FragMC/Icedspear</url>
         </repository>
     </repositories>
 

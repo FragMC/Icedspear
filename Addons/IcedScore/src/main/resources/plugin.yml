@@ -12,7 +12,7 @@ commands:
   icedscore:
     description: IcedScores main command
     aliases: [ is, iscores ]
-    usage: /icedscore <help|create|delete|list|reload>
+    usage: /icedscore <help|list|reload|refresh [id]|info <id>>
     permission: icedscore.admin
 
 permissions:

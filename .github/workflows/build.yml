@@ -1,0 +1,80 @@
+name: Build
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+          server-id: github
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
+
+      - name: Build IcedSpear
+        run: mvn -B -f IcedSpear/pom.xml clean install
+
+      - name: Upload IcedSpear artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: IcedSpear-jar
+          path: IcedSpear/target/*.jar
+          if-no-files-found: error
+
+      - name: Publish IcedSpear to GitHub Packages
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/'))
+        run: mvn -B -f IcedSpear/pom.xml deploy -DskipTests
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+
+      - name: Build IcedScore
+        run: mvn -B -f Addons/IcedScore/pom.xml clean package
+
+      - name: Upload IcedScore artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: IcedScore-jar
+          path: Addons/IcedScore/target/*.jar
+          if-no-files-found: error
+
+      - name: Publish IcedScore to GitHub Packages
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/'))
+        run: mvn -B -f Addons/IcedScore/pom.xml deploy -DskipTests
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+
+      - name: Build Weblink
+        run: mvn -B -f Addons/Weblink/pom.xml clean package
+
+      - name: Upload Weblink artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Weblink-jar
+          path: Addons/Weblink/target/*.jar
+          if-no-files-found: error
+
+      - name: Publish Weblink to GitHub Packages
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/'))
+        run: mvn -B -f Addons/Weblink/pom.xml deploy -DskipTests
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}

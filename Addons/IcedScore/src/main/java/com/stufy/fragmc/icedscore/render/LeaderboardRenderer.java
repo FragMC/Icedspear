@@ -1,32 +1,41 @@
 package com.stufy.fragmc.icedscore.render;
 
 import com.loohp.imageframe.ImageFrame;
-import com.loohp.imageframe.objectholders.DiagramImageMap;
 import com.loohp.imageframe.objectholders.ImageMap;
+import com.loohp.imageframe.objectholders.ImageMapManager;
 import com.stufy.fragmc.icedscore.IcedScores;
 import com.stufy.fragmc.icedscore.api.IcedSpearBridge;
 import com.stufy.fragmc.icedscore.config.LeaderboardConfig;
 import com.stufy.fragmc.icedscore.config.LeaderboardConfig.Align;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 
 import java.awt.*;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
+import java.util.Set;
 import java.util.logging.Level;
 
 /**
  * Renders leaderboard data into a BufferedImage and pushes it to an
- * ImageFrame DiagramImageMap located by name.
+ * ImageFrame map.
  *
  * HOW TO SET UP IN-GAME:
- *   /imageframe diagram <name> <width> <height>
- *   e.g. /imageframe diagram snowfall_board 1 2
+ *   1. Create a map: /imageframe create <n> <url> <width> <height>
+ *      (use any image URL as placeholder — we will override it each tick)
+ *      e.g. /imageframe create snowfall_board https://i.imgur.com/example.png 1 2
+ *   2. Set `imageframe-map` in config.yml to the exact name you chose.
+ *   3. Note the UUID of the player who created it — add it as `imageframe-owner`
+ *      in config.yml so we can locate the map.
  *
- * The <name> must match `imageframe-map` in config.yml.
- * DiagramImageMap is the ImageFrame type designed for programmatic image updates.
+ * The map is found via:
+ *   ImageFrame.imageMapManager.getFromCreator(ownerUUID)
+ * filtered by name, then updated by replacing its rendered pixels using
+ * the Bukkit MapView/MapRenderer API.
  */
 public class LeaderboardRenderer {
 
@@ -73,8 +82,7 @@ public class LeaderboardRenderer {
         cy += titleH + 4;
 
         if (cfg.headerRowEnabled) {
-            int hh = drawHeaderRow(g, cfg, cx, cy, cw);
-            cy += hh;
+            cy += drawHeaderRow(g, cfg, cx, cy, cw);
         }
 
         drawRows(g, cfg, entries, cx, cy, cw, ch - (cy - cfg.padTop));
@@ -89,10 +97,9 @@ public class LeaderboardRenderer {
 
     private void drawBackground(Graphics2D g, LeaderboardConfig cfg, int W, int H) {
         if (cfg.gradientEnabled) {
-            GradientPaint gp = new GradientPaint(
+            g.setPaint(new GradientPaint(
                     0, 0, applyAlpha(cfg.gradientTop,    cfg.bgOpacity),
-                    0, H, applyAlpha(cfg.gradientBottom, cfg.bgOpacity));
-            g.setPaint(gp);
+                    0, H, applyAlpha(cfg.gradientBottom, cfg.bgOpacity)));
         } else {
             g.setColor(applyAlpha(cfg.bgColor, cfg.bgOpacity));
         }
@@ -146,7 +153,6 @@ public class LeaderboardRenderer {
         int[] colXs = computeColumnXs(cfg, x, w);
         g.setColor(cfg.headerRowColor);
         int ty = y + cfg.rowPadding + fm.getAscent();
-
         if (cfg.rankCol.enabled)   g.drawString(cfg.rankCol.header,   colXs[0], ty);
         if (cfg.playerCol.enabled) g.drawString(cfg.playerCol.header, colXs[1], ty);
         if (cfg.timeCol.enabled)   drawRightAligned(g, cfg.timeCol.header, colXs[2], x + w, ty);
@@ -166,8 +172,7 @@ public class LeaderboardRenderer {
                           List<IcedSpearBridge.Entry> entries,
                           int x, int y, int w, int availH) {
         if (entries.isEmpty()) {
-            Font f = fonts.get(cfg.defaultFont, cfg.playerCol.fontSize, false, true);
-            g.setFont(f);
+            g.setFont(fonts.get(cfg.defaultFont, cfg.playerCol.fontSize, false, true));
             g.setColor(new Color(120, 120, 120));
             g.drawString("No times recorded.", x + 4, y + g.getFontMetrics().getAscent() + 4);
             return;
@@ -213,33 +218,28 @@ public class LeaderboardRenderer {
                 g.setColor(cfg.podiumEnabled && rank <= 3 ? textColor : cfg.rankCol.color);
                 g.drawString(rank + ".", colXs[0], ty);
             }
-
             if (cfg.playerCol.enabled) {
                 g.setFont(playerFont);
                 g.setColor(textColor);
                 drawClipped(g, entry.playerName(), colXs[1], ty, colXs[2] - colXs[1] - 4);
             }
-
             if (cfg.timeCol.enabled) {
                 g.setFont(timeFont);
                 g.setColor(cfg.podiumEnabled && rank <= 3 ? textColor : cfg.timeCol.color);
                 drawRightAligned(g, entry.formattedTime(), colXs[2], x + w, ty);
             }
-
             if (cfg.rowSeparatorEnabled) {
                 g.setColor(cfg.rowSeparatorColor);
                 g.setStroke(new BasicStroke(cfg.rowSeparatorThickness));
                 g.drawLine(x, y + rowH, x + w, y + rowH);
                 g.setStroke(new BasicStroke(1));
             }
-
             y += rowH;
         }
     }
 
     private void drawFooter(Graphics2D g, LeaderboardConfig cfg, int W, int H) {
-        Font f = fonts.get(cfg.defaultFont, cfg.footerFontSize, false, cfg.footerItalic);
-        g.setFont(f);
+        g.setFont(fonts.get(cfg.defaultFont, cfg.footerFontSize, false, cfg.footerItalic));
         String text = cfg.footerText.replace("{time}", LocalTime.now().format(TIME_FMT));
         g.setColor(cfg.footerColor);
         int x = alignedX(g, text, cfg.padLeft, W - cfg.padLeft - cfg.padRight, cfg.footerAlign);
@@ -284,40 +284,67 @@ public class LeaderboardRenderer {
     // ─── ImageFrame push ─────────────────────────────────────────────────────
 
     /**
-     * Locates the DiagramImageMap by name and calls setAndSendImage().
+     * Finds the named ImageFrame map owned by any player, then uses
+     * LeaderboardMapRenderer (a Bukkit MapRenderer) to draw the image.
      *
-     * Create the map in-game first:
-     *   /imageframe diagram <imageframe-map> <map-width> <map-height>
+     * Lookup uses ImageFrame.imageMapManager.getFromCreator(uuid) per online
+     * player until a name match is found.  This is the only public API
+     * ImageFrame exposes for map lookup by name.
+     *
+     * The map is also force-sent to all nearby online players via imageMap.send().
      */
     private void pushToImageFrame(String leaderboardId, LeaderboardConfig cfg, BufferedImage image) {
         try {
-            // Search all maps by name (case-insensitive)
-            Optional<ImageMap> found = ImageFrame.imageMapManager.getImageMaps().stream()
-                    .filter(m -> cfg.imageFrameMap.equalsIgnoreCase(m.getName()))
-                    .findFirst();
+            ImageMapManager manager = ImageFrame.imageMapManager;
+            ImageMap found = null;
 
-            if (found.isEmpty()) {
+            // Search maps owned by every online player by name
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                Set<ImageMap> owned = manager.getFromCreator(p.getUniqueId());
+                for (ImageMap m : owned) {
+                    if (cfg.imageFrameMap.equalsIgnoreCase(m.getName())) {
+                        found = m;
+                        break;
+                    }
+                }
+                if (found != null) break;
+            }
+
+            // If still not found, try every map in the manager (brute force via index scan)
+            if (found == null) {
+                // ImageMapManager stores maps by image index; scan indices 1..maxId
+                // getFromCreator(null) is not available, so we try a broad getFromCreator
+                // on a null UUID which some versions support to return all maps
+                try {
+                    Set<ImageMap> allMaps = manager.getFromCreator((java.util.UUID) null);
+                    if (allMaps != null) {
+                        for (ImageMap m : allMaps) {
+                            if (cfg.imageFrameMap.equalsIgnoreCase(m.getName())) {
+                                found = m;
+                                break;
+                            }
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            if (found == null) {
                 plugin.getLogger().warning(
-                        "[IcedScores] ImageFrame DiagramImageMap '" + cfg.imageFrameMap
-                                + "' not found for leaderboard '" + leaderboardId + "'. "
-                                + "Create it in-game: /imageframe diagram "
-                                + cfg.imageFrameMap + " " + cfg.mapWidth + " " + cfg.mapHeight);
+                        "[IcedScores] Could not find ImageFrame map named '" + cfg.imageFrameMap
+                                + "' for leaderboard '" + leaderboardId + "'. "
+                                + "Make sure the map owner is online, or see README for alternatives. "
+                                + "Create it with: /imageframe create " + cfg.imageFrameMap
+                                + " <any_url> " + cfg.mapWidth + " " + cfg.mapHeight);
                 return;
             }
 
-            ImageMap map = found.get();
+            // Install / refresh our renderer on every MapView this ImageMap uses
+            final ImageMap targetMap = found;
+            LeaderboardMapRenderer.installOn(targetMap, image);
 
-            if (!(map instanceof DiagramImageMap diagram)) {
-                plugin.getLogger().warning(
-                        "[IcedScores] '" + cfg.imageFrameMap + "' is not a DiagramImageMap "
-                                + "(type: " + map.getClass().getSimpleName() + "). "
-                                + "Delete and recreate with: /imageframe diagram "
-                                + cfg.imageFrameMap + " " + cfg.mapWidth + " " + cfg.mapHeight);
-                return;
-            }
-
-            // Apply image and push map packets to all current viewers
-            diagram.setAndSendImage(image, diagram.getViewers());
+            // Force-send updated map data to all online players
+            Collection<? extends Player> online = Bukkit.getOnlinePlayers();
+            targetMap.send(online);
 
         } catch (Exception e) {
             plugin.getLogger().log(Level.WARNING,

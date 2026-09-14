@@ -5,11 +5,14 @@ import com.stufy.fragmc.icedscore.config.LeaderboardConfig;
 import com.stufy.fragmc.icedscore.config.LeaderboardConfigLoader;
 import com.stufy.fragmc.icedscore.render.LeaderboardRenderer;
 import com.stufy.fragmc.icedscore.render.FontRegistry;
+import com.stufy.fragmc.icedscore.api.IcedSpearBridge;
 import org.bukkit.Bukkit;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.io.File;
+import java.io.InputStream;
 import java.util.*;
 import java.util.logging.Level;
 
@@ -32,8 +35,15 @@ public final class IcedScores extends JavaPlugin {
         saveDefaultConfig();
         File fontsDir = new File(getDataFolder(), "fonts");
         if (!fontsDir.exists()) fontsDir.mkdirs();
-        // Save bundled Minecraft font
-        saveResource("fonts/minecraft.ttf", false);
+        try {
+            InputStream res = getResource("fonts/minecraft.ttf");
+            if (res != null) {
+                res.close();
+                saveResource("fonts/minecraft.ttf", false);
+            } else {
+                getLogger().fine("Bundled font not found in jar; will use system fonts or external files.");
+            }
+        } catch (Exception ignored) {}
 
         fontRegistry = new FontRegistry(fontsDir);
         configLoader = new LeaderboardConfigLoader(this);
@@ -42,8 +52,10 @@ public final class IcedScores extends JavaPlugin {
         loadAll();
 
         // Register command
-        Objects.requireNonNull(getCommand("icedscore"))
-                .setExecutor(new IcedScoreCommand(this));
+        PluginCommand cmd = Objects.requireNonNull(getCommand("icedscore"));
+        IcedScoreCommand exec = new IcedScoreCommand(this);
+        cmd.setExecutor(exec);
+        cmd.setTabCompleter(exec);
 
         getLogger().info("IcedScores enabled with " + leaderboards.size() + " leaderboard(s).");
     }
@@ -63,6 +75,7 @@ public final class IcedScores extends JavaPlugin {
         }
 
         reloadConfig();
+        IcedSpearBridge.reset();
         fontRegistry.reload();
         leaderboards = configLoader.loadAll();
 
