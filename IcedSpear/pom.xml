@@ -29,10 +29,9 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.11.0</version>
+                <version>3.13.0</version>
                 <configuration>
-                    <source>25</source>
-                    <target>25</target>
+                    <release>25</release>
                 </configuration>
             </plugin>
             <plugin>
@@ -78,7 +77,7 @@
         <dependency>
             <groupId>io.papermc.paper</groupId>
             <artifactId>paper-api</artifactId>
-            <version>[26.2.build,)</version>
+            <version>26.2.build.123-stable</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
