@@ -3,7 +3,7 @@ version: 1.5.1
 main: com.fragmc.weblink.WebLinkAddon
 author: FragMC
 description: Web integration addon for IcedSpear
-api-version: 1.21
+api-version: '26.2'
 depend: [IcedSpear]
 softdepend: [Frost]
 

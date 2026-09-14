@@ -1,7 +1,7 @@
 name: IcedScores
 version: '${project.version}'
 main: com.stufy.fragmc.icedscore.IcedScores
-api-version: '1.21'
+api-version: '26.2'
 description: ImageFrame leaderboard displays powered by IcedSpear
 authors: [ ]
 depend:
