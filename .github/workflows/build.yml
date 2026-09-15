@@ -41,6 +41,7 @@ jobs:
       - name: Publish IcedSpear to GitHub Packages
         if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/'))
         run: mvn -B -f IcedSpear/pom.xml deploy -DskipTests
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
@@ -58,6 +59,7 @@ jobs:
       - name: Publish IcedScore to GitHub Packages
         if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/'))
         run: mvn -B -f Addons/IcedScore/pom.xml deploy -DskipTests
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
@@ -75,6 +77,7 @@ jobs:
       - name: Publish Weblink to GitHub Packages
         if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/'))
         run: mvn -B -f Addons/Weblink/pom.xml deploy -DskipTests
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
