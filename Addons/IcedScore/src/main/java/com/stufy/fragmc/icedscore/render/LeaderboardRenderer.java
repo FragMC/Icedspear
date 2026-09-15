@@ -342,13 +342,28 @@ public class LeaderboardRenderer {
             final ImageMap targetMap = found;
             LeaderboardMapRenderer.installOn(targetMap, image);
 
-            // Force-send updated map data to all online players
-            Collection<? extends Player> online = Bukkit.getOnlinePlayers();
+            // Force-send updated map data to all online players (Bedrock crossplay: Geyser translates maps, but filter Bedrock if needed - ImageFrame maps are Java maps, Geyser will handle translation)
+            Collection<? extends Player> online = Bukkit.getOnlinePlayers().stream()
+                    .filter(p -> !isBedrock(p))
+                    .toList();
+            // If all players are Bedrock, still send to all (Geyser will try translate)
+            if (online.isEmpty()) online = Bukkit.getOnlinePlayers();
             targetMap.send(online);
 
         } catch (Exception e) {
             plugin.getLogger().log(Level.WARNING,
                     "[IcedScores] Error pushing to ImageFrame map '" + cfg.imageFrameMap + "'", e);
+        }
+    }
+
+    private boolean isBedrock(Player player) {
+        try {
+            if (Bukkit.getPluginManager().getPlugin("floodgate") == null) return false;
+            Class<?> floodgate = Class.forName("org.geysermc.floodgate.api.FloodgateApi");
+            Object api = floodgate.getMethod("getInstance").invoke(null);
+            return (boolean) floodgate.getMethod("isFloodgatePlayer", java.util.UUID.class).invoke(api, player.getUniqueId());
+        } catch (Exception ignored) {
+            return false;
         }
     }
 }

@@ -3,8 +3,9 @@ version: 1.3.2
 main: com.stufy.fragmc.icedspear.IcedSpear
 api-version: '26.2'
 author: Stufy
-description: Custom map lobbies plugin with party system, timers, and leaderboards
+description: Custom map lobbies plugin with party system, timers, and leaderboards (Bedrock crossplay via Geyser/Floodgate, 26.2)
 depend: [FastAsyncWorldEdit]
+softdepend: [Geyser-Spigot, floodgate]
 
 # Paper-specific optimizations
 folia-supported: false
