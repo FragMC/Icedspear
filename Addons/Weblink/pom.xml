@@ -70,11 +70,7 @@
             <id>modrinth</id>
             <url>https://api.modrinth.com/maven</url>
         </repository>
-        <repository>
-            <id>github</id>
-            <name>GitHub Packages - FragMC</name>
-            <url>https://maven.pkg.github.com/FragMC/Icedspear</url>
-        </repository>
+
     </repositories>
 
     <dependencies>
