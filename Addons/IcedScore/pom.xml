@@ -6,7 +6,7 @@
 
     <groupId>com.stufy.fragmc</groupId>
     <artifactId>IcedScores</artifactId>
-    <version>2.0.0-alpha</version>
+    <version>2.0.5-alpha</version>
     <packaging>jar</packaging>
 
     <name>IcedScores</name>
@@ -51,11 +51,11 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- IcedSpear - use GitHub Packages 2.0.0-alpha (primary) + Modrinth fallback -->
+        <!-- IcedSpear - use GitHub Packages 2.0.5-alpha (primary) + Modrinth fallback -->
         <dependency>
             <groupId>com.stufy.fragmc</groupId>
             <artifactId>icedspear</artifactId>
-            <version>2.0.0-alpha</version>
+            <version>2.0.5-alpha</version>
             <scope>provided</scope>
         </dependency>
 
