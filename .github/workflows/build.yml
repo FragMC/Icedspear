@@ -12,7 +12,7 @@ permissions:
   packages: write
 
 jobs:
-  build:
+  build-icedspear:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -48,8 +48,27 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
 
+  build-editor:
+    runs-on: ubuntu-latest
+    needs: build-icedspear
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+          server-id: github
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
+
       - name: Build Editor (lightweight)
-        run: mvn -B -f Addons/Editor/pom.xml clean install
+        run: mvn -B -f Addons/Editor/pom.xml clean package
 
       - name: Upload Editor artifact
         uses: actions/upload-artifact@v5
@@ -65,6 +84,25 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
+
+  build-blocks:
+    runs-on: ubuntu-latest
+    needs: build-editor
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+          server-id: github
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
 
       - name: Build Blocks (requires Editor, FMM models auto-installed)
         run: mvn -B -f Addons/Blocks/pom.xml clean package
@@ -84,7 +122,26 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
 
-      - name: Build IcedScore
+  build-icedscore:
+    runs-on: ubuntu-latest
+    needs: build-icedspear
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+          server-id: github
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
+
+      - name: Build IcedScore (uses Maven - IcedSpear from GitHub Packages)
         run: mvn -B -f Addons/IcedScore/pom.xml clean package
 
       - name: Upload IcedScore artifact
@@ -102,7 +159,26 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
 
-      - name: Build Weblink
+  build-weblink:
+    runs-on: ubuntu-latest
+    needs: build-icedspear
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+          server-id: github
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
+
+      - name: Build Weblink (uses Maven - IcedSpear from GitHub Packages)
         run: mvn -B -f Addons/Weblink/pom.xml clean package
 
       - name: Upload Weblink artifact
@@ -120,8 +196,17 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
 
+  release:
+    runs-on: ubuntu-latest
+    needs: [build-icedspear, build-editor, build-blocks, build-icedscore, build-weblink]
+    if: always() && github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
       - name: Create GitHub Release with commit description as Maven release notes
-        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
         run: |
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout -f IcedSpear/pom.xml)
           COMMIT_DESC=$(git log -1 --pretty=%B)
