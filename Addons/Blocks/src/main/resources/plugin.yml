@@ -1,0 +1,10 @@
+name: BlocksAddon
+version: '2.0.0-alpha'
+main: com.stufy.fragmc.blocks.BlocksAddon
+api-version: '26.2'
+author: FragMC
+description: Smart zone blocks - requires EditorAddon, FMM models auto-installed
+depend: [IcedSpear, EditorAddon]
+softdepend: [FreeMinecraftModels, FastAsyncWorldEdit, Multiverse-Core, Geyser-Spigot, floodgate]
+load: POSTWORLD
+folia-supported: false

@@ -1,0 +1,21 @@
+name: EditorAddon
+version: '2.0.0-alpha'
+main: com.stufy.fragmc.editor.EditorAddon
+api-version: '26.2'
+author: FragMC
+description: Lightweight server map editor - Multiverse + Dropbox, no OP
+depend: [IcedSpear]
+softdepend: [Multiverse-Core, FastAsyncWorldEdit, Vault, Floodgate, Geyser-Spigot]
+load: POSTWORLD
+folia-supported: false
+
+commands:
+  map:
+    description: Map editor commands (create, save, linkdropbox)
+    usage: /map <create|save|linkdropbox> [args]
+    permission: icedspear.map
+
+permissions:
+  editor.use:
+    description: Use editor
+    default: true

@@ -1,0 +1,28 @@
+{
+  "meta": {
+    "format_version": "4.5",
+    "model_format": "free_minecraft_models",
+    "box_uv": true
+  },
+  "name": "elytra_zone",
+  "description": "Dummy FMM model for Elytra Add Zone - replace with real Blockbench export",
+  "material": "GLASS",
+  "textures": {
+    "elytra_zone": "elytra_zone.png"
+  },
+  "elements": [
+    {
+      "name": "zone",
+      "from": [0, 0, 0],
+      "to": [16, 16, 16],
+      "faces": {
+        "north": {"uv": [0, 0, 16, 16], "texture": "#elytra_zone"},
+        "east": {"uv": [0, 0, 16, 16], "texture": "#elytra_zone"},
+        "south": {"uv": [0, 0, 16, 16], "texture": "#elytra_zone"},
+        "west": {"uv": [0, 0, 16, 16], "texture": "#elytra_zone"},
+        "up": {"uv": [0, 0, 16, 16], "texture": "#elytra_zone"},
+        "down": {"uv": [0, 0, 16, 16], "texture": "#elytra_zone"}
+      }
+    }
+  ]
+}

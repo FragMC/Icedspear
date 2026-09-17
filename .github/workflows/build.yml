@@ -48,6 +48,42 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
 
+      - name: Build Editor (lightweight)
+        run: mvn -B -f Addons/Editor/pom.xml clean install
+
+      - name: Upload Editor artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: Editor-jar
+          path: Addons/Editor/target/*.jar
+          if-no-files-found: error
+
+      - name: Publish Editor to GitHub Packages
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/'))
+        run: mvn -B -f Addons/Editor/pom.xml deploy -DskipTests
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+
+      - name: Build Blocks (requires Editor, FMM models auto-installed)
+        run: mvn -B -f Addons/Blocks/pom.xml clean package
+
+      - name: Upload Blocks artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: Blocks-jar
+          path: Addons/Blocks/target/*.jar
+          if-no-files-found: error
+
+      - name: Publish Blocks to GitHub Packages
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/'))
+        run: mvn -B -f Addons/Blocks/pom.xml deploy -DskipTests
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+
       - name: Build IcedScore
         run: mvn -B -f Addons/IcedScore/pom.xml clean package
 

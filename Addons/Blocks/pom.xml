@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.stufy.fragmc</groupId>
+    <artifactId>blocks-addon</artifactId>
+    <version>2.0.0-alpha</version>
+    <packaging>jar</packaging>
+
+    <name>BlocksAddon</name>
+    <description>Smart zone blocks for IcedSpear - requires EditorAddon, FMM models auto-installed</description>
+
+    <distributionManagement>
+        <repository>
+            <id>github</id>
+            <name>GitHub Packages - Blocks</name>
+            <url>https://maven.pkg.github.com/FragMC/Icedspear</url>
+        </repository>
+    </distributionManagement>
+
+    <properties>
+        <maven.compiler.source>25</maven.compiler.source>
+        <maven.compiler.target>25</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <repositories>
+        <repository>
+            <id>papermc</id>
+            <url>https://repo.papermc.io/repository/maven-public/</url>
+        </repository>
+        <repository>
+            <id>enginehub-maven</id>
+            <url>https://maven.enginehub.org/repo/</url>
+        </repository>
+        <repository>
+            <id>magmaguy-repo-releases</id>
+            <url>https://repo.magmaguy.com/releases</url>
+        </repository>
+    </repositories>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.papermc.paper</groupId>
+            <artifactId>paper-api</artifactId>
+            <version>26.2.build.123-stable</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.stufy.fragmc</groupId>
+            <artifactId>icedspear</artifactId>
+            <version>2.0.0-alpha</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.stufy.fragmc</groupId>
+            <artifactId>editor-addon</artifactId>
+            <version>2.0.0-alpha</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.magmaguy</groupId>
+            <artifactId>FreeMinecraftModels</artifactId>
+            <version>2.7.1</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.fastasyncworldedit</groupId>
+            <artifactId>FastAsyncWorldEdit-Bukkit</artifactId>
+            <version>2.11.1</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.10.1</version>
+            <scope>compile</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <release>25</release>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.6.2</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals><goal>shade</goal></goals>
+                        <configuration>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <relocations>
+                                <relocation>
+                                    <pattern>com.google.gson</pattern>
+                                    <shadedPattern>com.stufy.fragmc.blocks.libs.gson</shadedPattern>
+                                </relocation>
+                            </relocations>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
+    </build>
+</project>
