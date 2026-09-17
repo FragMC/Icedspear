@@ -1,4 +1,4 @@
-package com.fragmc.weblink;
+package com.stufy.fragmc.weblink;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;

@@ -1,4 +1,4 @@
-package com.fragmc.weblink;
+package com.stufy.fragmc.weblink;
 
 import com.stufy.fragmc.icedspear.api.IcedSpearAPI;
 import org.bukkit.Bukkit;

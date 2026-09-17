@@ -1,4 +1,4 @@
-package com.fragmc.weblink;
+package com.stufy.fragmc.weblink;
 
 import java.io.File;
 import java.sql.*;

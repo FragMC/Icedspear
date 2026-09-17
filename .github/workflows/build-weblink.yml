@@ -1,0 +1,66 @@
+name: Build Weblink
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'Addons/Weblink/**'
+      - '.github/workflows/build-weblink.yml'
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+          server-id: github
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
+
+      - name: Build IcedSpear (required for Weblink)
+        run: mvn -B -f IcedSpear/pom.xml clean install -DskipTests
+
+      - name: Build Weblink
+        run: mvn -B -f Addons/Weblink/pom.xml clean package
+
+      - name: Upload Weblink artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: Weblink-jar
+          path: Addons/Weblink/target/*.jar
+          if-no-files-found: error
+
+      - name: Publish Weblink to GitHub Packages
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/'))
+        run: mvn -B -f Addons/Weblink/pom.xml deploy -DskipTests
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+
+      - name: Create GitHub Release with commit description
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+        run: |
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout -f Addons/Weblink/pom.xml)
+          COMMIT_DESC=$(git log -1 --pretty=%B)
+          echo "Version: $VERSION"
+          echo "$COMMIT_DESC"
+          gh release create "weblink-v$VERSION" --title "Weblink $VERSION" --notes "$COMMIT_DESC" --target ${{ github.sha }} || echo "Release already exists or failed (ignoring)"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

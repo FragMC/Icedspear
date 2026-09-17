@@ -1,4 +1,4 @@
-package com.fragmc.weblink;
+package com.stufy.fragmc.weblink;
 
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
