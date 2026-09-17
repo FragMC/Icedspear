@@ -39,6 +39,11 @@
             <id>opencollab-snapshot</id>
             <url>https://repo.opencollab.dev/maven-snapshots/</url>
         </repository>
+        <repository>
+            <id>github</id>
+            <name>GitHub Packages - FragMC</name>
+            <url>https://maven.pkg.github.com/FragMC/Icedspear</url>
+        </repository>
     </repositories>
 
     <dependencies>

@@ -39,6 +39,11 @@
             <id>magmaguy-repo-releases</id>
             <url>https://repo.magmaguy.com/releases</url>
         </repository>
+        <repository>
+            <id>github</id>
+            <name>GitHub Packages - FragMC</name>
+            <url>https://maven.pkg.github.com/FragMC/Icedspear</url>
+        </repository>
     </repositories>
 
     <dependencies>
