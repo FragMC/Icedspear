@@ -97,14 +97,49 @@ public class SchematicManager {
                 return;
             }
 
-            // Parse map data
+            // Parse map data - supports both legacy format (top-level keys with schematic) and new format (maps array with schematic_url)
             mapToSchematic.clear();
+            // Handle new format: { "maps": [ {id, schematic_url, ...}, ... ] }
+            if (mapData.has("maps") && mapData.get("maps").isJsonArray()) {
+                var mapsArray = mapData.getAsJsonArray("maps");
+                for (var element : mapsArray) {
+                    if (!element.isJsonObject()) continue;
+                    JsonObject mapInfo = element.getAsJsonObject();
+                    String mapName = null;
+                    String schematic = null;
+                    // New format uses id and schematic_url, legacy uses key and schematic
+                    if (mapInfo.has("id") && !mapInfo.get("id").isJsonNull()) {
+                        mapName = mapInfo.get("id").getAsString();
+                    } else if (mapInfo.has("name") && !mapInfo.get("name").isJsonNull()) {
+                        mapName = mapInfo.get("name").getAsString();
+                    }
+                    if (mapInfo.has("schematic_url") && !mapInfo.get("schematic_url").isJsonNull()) {
+                        schematic = mapInfo.get("schematic_url").getAsString();
+                    } else if (mapInfo.has("schematic") && !mapInfo.get("schematic").isJsonNull()) {
+                        schematic = mapInfo.get("schematic").getAsString();
+                    }
+                    if (mapName != null && schematic != null && !schematic.isEmpty()) {
+                        mapToSchematic.put(mapName, schematic);
+                        plugin.getLogger().info("Loaded map (new format): " + mapName + " -> " + schematic);
+                    }
+                }
+            }
+            // Handle legacy format: { "tutorial": {schematic: "tutorial39", ...}, "unholygauntlet": {...} }
             for (String mapName : mapData.keySet()) {
-                JsonObject mapInfo = mapData.getAsJsonObject(mapName);
-                if (mapInfo.has("schematic")) {
-                    String schematic = mapInfo.get("schematic").getAsString();
+                if (mapName.equals("maps")) continue; // already handled
+                var element = mapData.get(mapName);
+                if (!element.isJsonObject()) continue;
+                JsonObject mapInfo = element.getAsJsonObject();
+                // Skip if it's not a map object (e.g., has no schematic)
+                String schematic = null;
+                if (mapInfo.has("schematic") && !mapInfo.get("schematic").isJsonNull()) {
+                    schematic = mapInfo.get("schematic").getAsString();
+                } else if (mapInfo.has("schematic_url") && !mapInfo.get("schematic_url").isJsonNull()) {
+                    schematic = mapInfo.get("schematic_url").getAsString();
+                }
+                if (schematic != null && !schematic.isEmpty() && !mapToSchematic.containsKey(mapName)) {
                     mapToSchematic.put(mapName, schematic);
-                    plugin.getLogger().info("Loaded map: " + mapName + " -> " + schematic);
+                    plugin.getLogger().info("Loaded map (legacy format): " + mapName + " -> " + schematic);
                 }
             }
 
@@ -117,11 +152,8 @@ public class SchematicManager {
     }
 
     public boolean pasteSchematic(String schematicName, Location location) {
-        File schematicFile = new File(schematicsFolder, schematicName + ".schem");
-
-        if (!schematicFile.exists()) {
-            schematicFile = new File(schematicsFolder, schematicName + ".schematic");
-        }
+        // Handle URL schematics (new format: https://dl.dropboxusercontent.com/.../map.schem)
+        File schematicFile = resolveSchematicFile(schematicName);
 
         if (!schematicFile.exists()) {
             plugin.getLogger().warning("Schematic file not found: " + schematicName);
@@ -200,10 +232,7 @@ public class SchematicManager {
     }
 
     public org.bukkit.util.BoundingBox getSchematicBounds(String schematicName, Location pasteLocation) {
-        File schematicFile = new File(schematicsFolder, schematicName + ".schem");
-        if (!schematicFile.exists()) {
-            schematicFile = new File(schematicsFolder, schematicName + ".schematic");
-        }
+        File schematicFile = resolveSchematicFile(schematicName);
 
         if (!schematicFile.exists()) {
             return null;
@@ -295,6 +324,64 @@ public class SchematicManager {
             plugin.getLogger().severe("Failed to import schematic: " + e.getMessage());
             return false;
         }
+    }
+
+    private File resolveSchematicFile(String schematicName) {
+        // If it's a URL (new format), download to cache
+        if (schematicName.startsWith("http://") || schematicName.startsWith("https://")) {
+            try {
+                // Fix Dropbox dl=0 to dl=1 for direct download
+                String url = schematicName;
+                if (url.contains("dropbox.com") && url.contains("dl=0")) {
+                    url = url.replace("dl=0", "dl=1");
+                }
+                // Use mapName as filename, sanitized
+                String safeName = schematicName.replaceAll("[^a-zA-Z0-9]", "_");
+                // Try to get original map name from mapToSchematic reverse lookup for better filename
+                String fileName = safeName.substring(0, Math.min(50, safeName.length())) + ".schem";
+                // Find the mapName that corresponds to this URL for better caching
+                for (Map.Entry<String, String> entry : mapToSchematic.entrySet()) {
+                    if (entry.getValue().equals(schematicName)) {
+                        fileName = entry.getKey() + ".schem";
+                        break;
+                    }
+                }
+                File cachedFile = new File(schematicsFolder, fileName);
+                // Also check cache folder for URL-based maps (12h cache as per plan)
+                File cacheFile = new File(new File(plugin.getDataFolder().getParentFile().getParentFile(), "cache/maps"), fileName);
+                if (cacheFile.exists() && System.currentTimeMillis() - cacheFile.lastModified() < 12 * 60 * 60 * 1000L) {
+                    return cacheFile;
+                }
+                if (cachedFile.exists() && cachedFile.length() > 0) {
+                    return cachedFile;
+                }
+                // Download
+                plugin.getLogger().info("Downloading schematic from URL: " + url);
+                URL downloadUrl = new URL(url);
+                java.net.HttpURLConnection conn = (java.net.HttpURLConnection) downloadUrl.openConnection();
+                conn.setRequestProperty("User-Agent", "IcedSpear/2.0");
+                conn.setInstanceFollowRedirects(true);
+                try (InputStream in = conn.getInputStream();
+                     FileOutputStream out = new FileOutputStream(cachedFile)) {
+                    byte[] buffer = new byte[8192];
+                    int bytesRead;
+                    while ((bytesRead = in.read(buffer)) != -1) {
+                        out.write(buffer, 0, bytesRead);
+                    }
+                }
+                plugin.getLogger().info("Downloaded schematic to: " + cachedFile.getAbsolutePath());
+                return cachedFile;
+            } catch (Exception e) {
+                plugin.getLogger().warning("Failed to download schematic URL: " + schematicName + " - " + e.getMessage());
+                // Fallback to trying as filename
+            }
+        }
+        // Legacy: treat as short name like "tutorial39"
+        File file = new File(schematicsFolder, schematicName + ".schem");
+        if (!file.exists()) {
+            file = new File(schematicsFolder, schematicName + ".schematic");
+        }
+        return file;
     }
 
     public String getSchematicForMap(String mapName) {
