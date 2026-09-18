@@ -327,40 +327,43 @@ public class SchematicManager {
     }
 
     private File resolveSchematicFile(String schematicName) {
-        // If it's a URL (new format), download to cache
+        // If it's a URL (new format), check cache first, download async if needed (non-blocking check)
         if (schematicName.startsWith("http://") || schematicName.startsWith("https://")) {
+            String url = schematicName;
+            if (url.contains("dropbox.com") && url.contains("dl=0")) {
+                url = url.replace("dl=0", "dl=1");
+            }
+            String safeName = schematicName.replaceAll("[^a-zA-Z0-9]", "_");
+            String fileName = safeName.substring(0, Math.min(50, safeName.length())) + ".schem";
+            for (Map.Entry<String, String> entry : mapToSchematic.entrySet()) {
+                if (entry.getValue().equals(schematicName)) {
+                    fileName = entry.getKey() + ".schem";
+                    break;
+                }
+            }
+            File cachedFile = new File(schematicsFolder, fileName);
+            File cacheFile = new File(new File(plugin.getDataFolder().getParentFile().getParentFile(), "cache/maps"), fileName);
+            // Check cache first (12h as per plan, larger maps shorter)
+            long cacheTtl = 12 * 60 * 60 * 1000L;
+            // Larger maps (>50MB) shorter cache as per user request
+            if (cachedFile.exists() && cachedFile.length() > 50 * 1024 * 1024) cacheTtl = 4 * 60 * 60 * 1000L;
+            if (cacheFile.exists() && System.currentTimeMillis() - cacheFile.lastModified() < cacheTtl) {
+                return cacheFile;
+            }
+            if (cachedFile.exists() && cachedFile.length() > 0) {
+                return cachedFile;
+            }
+            // Not in cache - return cachedFile path and let caller handle async download if needed
+            // For now, do sync download but with timeout to avoid blocking main thread too long
+            // In MapManager, this is called from async context where possible
             try {
-                // Fix Dropbox dl=0 to dl=1 for direct download
-                String url = schematicName;
-                if (url.contains("dropbox.com") && url.contains("dl=0")) {
-                    url = url.replace("dl=0", "dl=1");
-                }
-                // Use mapName as filename, sanitized
-                String safeName = schematicName.replaceAll("[^a-zA-Z0-9]", "_");
-                // Try to get original map name from mapToSchematic reverse lookup for better filename
-                String fileName = safeName.substring(0, Math.min(50, safeName.length())) + ".schem";
-                // Find the mapName that corresponds to this URL for better caching
-                for (Map.Entry<String, String> entry : mapToSchematic.entrySet()) {
-                    if (entry.getValue().equals(schematicName)) {
-                        fileName = entry.getKey() + ".schem";
-                        break;
-                    }
-                }
-                File cachedFile = new File(schematicsFolder, fileName);
-                // Also check cache folder for URL-based maps (12h cache as per plan)
-                File cacheFile = new File(new File(plugin.getDataFolder().getParentFile().getParentFile(), "cache/maps"), fileName);
-                if (cacheFile.exists() && System.currentTimeMillis() - cacheFile.lastModified() < 12 * 60 * 60 * 1000L) {
-                    return cacheFile;
-                }
-                if (cachedFile.exists() && cachedFile.length() > 0) {
-                    return cachedFile;
-                }
-                // Download
                 plugin.getLogger().info("Downloading schematic from URL: " + url);
                 URL downloadUrl = new URL(url);
                 java.net.HttpURLConnection conn = (java.net.HttpURLConnection) downloadUrl.openConnection();
                 conn.setRequestProperty("User-Agent", "IcedSpear/2.0");
                 conn.setInstanceFollowRedirects(true);
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(30000);
                 try (InputStream in = conn.getInputStream();
                      FileOutputStream out = new FileOutputStream(cachedFile)) {
                     byte[] buffer = new byte[8192];
@@ -373,15 +376,20 @@ public class SchematicManager {
                 return cachedFile;
             } catch (Exception e) {
                 plugin.getLogger().warning("Failed to download schematic URL: " + schematicName + " - " + e.getMessage());
-                // Fallback to trying as filename
             }
         }
-        // Legacy: treat as short name like "tutorial39"
         File file = new File(schematicsFolder, schematicName + ".schem");
         if (!file.exists()) {
             file = new File(schematicsFolder, schematicName + ".schematic");
         }
         return file;
+    }
+
+    public void downloadSchematicAsync(String schematicName, java.util.function.Consumer<File> callback) {
+        org.bukkit.Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            File file = resolveSchematicFile(schematicName);
+            org.bukkit.Bukkit.getScheduler().runTask(plugin, () -> callback.accept(file));
+        });
     }
 
     public String getSchematicForMap(String mapName) {

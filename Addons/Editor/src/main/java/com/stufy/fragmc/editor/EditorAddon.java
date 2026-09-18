@@ -31,15 +31,57 @@ public final class EditorAddon extends JavaPlugin {
     public void onEnable() {
         dropboxDir = new File(getDataFolder(), "dropbox");
         if (!dropboxDir.exists()) dropboxDir.mkdirs();
-        // Lightweight load - only filenames, not heavy DB
+        // Lightweight load - only filenames, not heavy DB - decrypt if key present
+        String encKey = getConfig().getString("dropbox-enc-key", "");
         for (File f : dropboxDir.listFiles((d, n) -> n.endsWith(".json"))) {
             try {
                 String uuid = f.getName().replace(".json", "");
-                String token = new String(java.nio.file.Files.readAllBytes(f.toPath())).trim();
+                String stored = new String(java.nio.file.Files.readAllBytes(f.toPath())).trim();
+                String token = stored;
+                if (!encKey.isEmpty() && stored.startsWith("ENC:")) {
+                    token = decrypt(stored.substring(4), encKey);
+                }
                 dropboxTokens.put(UUID.fromString(uuid), token);
             } catch (Exception ignored) {}
         }
-        getLogger().info("EditorAddon 2.0.0-alpha enabled - lightweight, Multiverse=" + (Bukkit.getPluginManager().getPlugin("Multiverse-Core") != null));
+        getLogger().info("EditorAddon 2.0.9-alpha enabled - lightweight, Multiverse=" + (Bukkit.getPluginManager().getPlugin("Multiverse-Core") != null) + ", Dropbox encrypt=" + (!encKey.isEmpty()));
+    }
+
+    private String encrypt(String plain, String key) {
+        try {
+            javax.crypto.Cipher cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding");
+            byte[] keyBytes = java.security.MessageDigest.getInstance("SHA-256").digest(key.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            javax.crypto.spec.SecretKeySpec keySpec = new javax.crypto.spec.SecretKeySpec(keyBytes, "AES");
+            byte[] iv = new byte[12];
+            new java.security.SecureRandom().nextBytes(iv);
+            javax.crypto.spec.GCMParameterSpec spec = new javax.crypto.spec.GCMParameterSpec(128, iv);
+            cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, keySpec, spec);
+            byte[] encrypted = cipher.doFinal(plain.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            byte[] combined = new byte[iv.length + encrypted.length];
+            System.arraycopy(iv, 0, combined, 0, iv.length);
+            System.arraycopy(encrypted, 0, combined, iv.length, encrypted.length);
+            return java.util.Base64.getEncoder().encodeToString(combined);
+        } catch (Exception e) {
+            return plain;
+        }
+    }
+
+    private String decrypt(String enc, String key) {
+        try {
+            byte[] combined = java.util.Base64.getDecoder().decode(enc);
+            byte[] iv = new byte[12];
+            System.arraycopy(combined, 0, iv, 0, 12);
+            byte[] encrypted = new byte[combined.length - 12];
+            System.arraycopy(combined, 12, encrypted, 0, encrypted.length);
+            javax.crypto.Cipher cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding");
+            byte[] keyBytes = java.security.MessageDigest.getInstance("SHA-256").digest(key.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            javax.crypto.spec.SecretKeySpec keySpec = new javax.crypto.spec.SecretKeySpec(keyBytes, "AES");
+            javax.crypto.spec.GCMParameterSpec spec = new javax.crypto.spec.GCMParameterSpec(128, iv);
+            cipher.init(javax.crypto.Cipher.DECRYPT_MODE, keySpec, spec);
+            return new String(cipher.doFinal(encrypted), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return enc;
+        }
     }
 
     @Override
@@ -188,7 +230,12 @@ public final class EditorAddon extends JavaPlugin {
         dropboxTokens.put(player.getUniqueId(), token);
         try {
             File f = new File(dropboxDir, player.getUniqueId() + ".json");
-            java.nio.file.Files.writeString(f.toPath(), token);
+            String toStore = token;
+            String encKey = getConfig().getString("dropbox-enc-key", "");
+            if (!encKey.isEmpty()) {
+                toStore = "ENC:" + encrypt(token, encKey);
+            }
+            java.nio.file.Files.writeString(f.toPath(), toStore);
         } catch (Exception e) {
             player.sendMessage(Component.text("Failed to save token", NamedTextColor.RED));
             return;
