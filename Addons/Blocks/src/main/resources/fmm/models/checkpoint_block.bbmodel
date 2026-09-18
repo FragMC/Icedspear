@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "format_version": "4.5",
+    "model_format": "free_minecraft_models",
+    "box_uv": true
+  },
+  "name": "checkpoint_block",
+  "description": "Dummy FMM model for Checkpoint Block - invisible, no hitbox, replace with real Blockbench export (emerald texture)",
+  "material": "BARRIER",
+  "textures": {
+    "checkpoint_block": "checkpoint_block.png"
+  },
+  "elements": [
+    {
+      "name": "checkpoint",
+      "from": [0, 0, 0],
+      "to": [16, 0.1, 16],
+      "faces": {
+        "up": {"uv": [0, 0, 16, 16], "texture": "#checkpoint_block"}
+      }
+    }
+  ]
+}

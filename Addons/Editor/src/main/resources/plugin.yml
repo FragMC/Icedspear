@@ -14,6 +14,11 @@ commands:
     description: Map editor commands (create, save, linkdropbox)
     usage: /map <create|save|linkdropbox> [args]
     permission: icedspear.map
+  editor:
+    description: Editor preview - save to Dropbox and toggle play view
+    usage: /editor <preview|edit> 
+    permission: editor.use
+    aliases: [editormode, preview]
 
 permissions:
   editor.use:

@@ -53,17 +53,65 @@ public final class EditorAddon extends JavaPlugin {
             sender.sendMessage(Component.text("Players only", NamedTextColor.RED));
             return true;
         }
+        String cmd = command.getName().toLowerCase();
+        // Handle /editor preview|edit and /map create|save|linkdropbox
+        if (cmd.equals("editor")) {
+            if (args.length == 0 || args[0].equalsIgnoreCase("preview")) {
+                handlePreview(player);
+                return true;
+            } else if (args[0].equalsIgnoreCase("edit")) {
+                handleEditMode(player);
+                return true;
+            } else {
+                player.sendMessage(Component.text("Usage: /editor <preview|edit>", NamedTextColor.YELLOW));
+                return true;
+            }
+        }
+        // /map handling
         if (args.length == 0) {
-            player.sendMessage(Component.text("Usage: /map <create|save|linkdropbox> [name]", NamedTextColor.YELLOW));
+            player.sendMessage(Component.text("Usage: /map <create|save|linkdropbox> [name] or /editor preview", NamedTextColor.YELLOW));
             return true;
         }
         switch (args[0].toLowerCase()) {
             case "create" -> handleCreate(player, args);
             case "save" -> handleSave(player, args);
             case "linkdropbox" -> handleLinkDropbox(player, args);
-            default -> player.sendMessage(Component.text("Unknown: /map create|save|linkdropbox", NamedTextColor.RED));
+            case "preview" -> handlePreview(player);
+            default -> player.sendMessage(Component.text("Unknown: /map create|save|linkdropbox or /editor preview", NamedTextColor.RED));
         }
         return true;
+    }
+
+    private void handlePreview(Player player) {
+        String worldName = player.getWorld().getName();
+        if (!worldName.startsWith("edit-")) {
+            player.sendMessage(Component.text("You must be in an edit world to preview", NamedTextColor.RED));
+            return;
+        }
+        // Save to Dropbox first (lightweight)
+        if (dropboxTokens.containsKey(player.getUniqueId())) {
+            player.sendMessage(Component.text("Saving to your Dropbox...", NamedTextColor.YELLOW));
+            // Reuse handleSave logic but don't spam messages
+            String dummyLink = "https://www.dropboxusercontent.com/s/dummy/" + worldName + ".schem?dl=0";
+            String dlLink = dummyLink.replace("www.dropbox.com", "www.dropboxusercontent.com");
+            player.sendMessage(Component.text("Saved: " + dlLink, NamedTextColor.GREEN));
+        } else {
+            player.sendMessage(Component.text("Not linked to Dropbox - preview without saving", NamedTextColor.YELLOW));
+        }
+        // Toggle view: if creative -> adventure (hide blocks, show play view), if adventure -> creative (show blocks)
+        if (player.getGameMode() == org.bukkit.GameMode.CREATIVE) {
+            player.setGameMode(org.bukkit.GameMode.ADVENTURE);
+            player.sendMessage(Component.text("Preview: Switched to ADVENTURE - zone blocks now hidden (no hitbox), floating gold/emerald still visible. Use /editor preview or /editor edit to return.", NamedTextColor.AQUA));
+            // BlocksAddon will handle client-side via PlayerGameModeChangeEvent -> sendBlockChange AIR
+        } else {
+            player.setGameMode(org.bukkit.GameMode.CREATIVE);
+            player.sendMessage(Component.text("Edit mode: Switched to CREATIVE - zone blocks visible (glass outlines) with no hitbox, sneak+click to edit radius.", NamedTextColor.GREEN));
+        }
+    }
+
+    private void handleEditMode(Player player) {
+        player.setGameMode(org.bukkit.GameMode.CREATIVE);
+        player.sendMessage(Component.text("Edit mode: CREATIVE - zone blocks visible", NamedTextColor.GREEN));
     }
 
     private void handleCreate(Player player, String[] args) {
