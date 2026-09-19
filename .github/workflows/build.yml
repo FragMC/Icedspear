@@ -57,11 +57,17 @@ jobs:
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout -f IcedSpear/pom.xml)
           if [[ "$VERSION" == *"-alpha"* ]]; then CHANNEL=Alpha; elif [[ "$VERSION" == *"-beta"* ]]; then CHANNEL=Beta; else CHANNEL=Release; fi
           echo "Publishing IcedSpear $VERSION to Hangar FragMC/IcedSpear channel $CHANNEL"
+          # Check if version already exists on Hangar
+          JWT_CHECK=$(curl -s -X POST "https://hangar.papermc.io/api/v1/authenticate?apiKey=$HANGAR_API_TOKEN" | grep -o '"token":"[^"]*' | cut -d'"' -f4)
+          if [ -n "$JWT_CHECK" ]; then
+            EXISTS=$(curl -s -H "Authorization: $JWT_CHECK" "https://hangar.papermc.io/api/v1/projects/FragMC/IcedSpear/versions/$VERSION" | grep -o '"version":"[^"]*"' || true)
+            if [ -n "$EXISTS" ]; then echo "Version $VERSION already exists on Hangar FragMC/IcedSpear, skipping"; exit 0; fi
+          fi
           COMMIT_DESC=$(git log -1 --pretty=%B)
           echo "$COMMIT_DESC" > /tmp/changelog.txt
           JWT=$(curl -s -X POST "https://hangar.papermc.io/api/v1/authenticate?apiKey=$HANGAR_API_TOKEN" | grep -o '"token":"[^"]*' | cut -d'"' -f4)
           if [ -z "$JWT" ]; then echo "Hangar auth failed for IcedSpear"; exit 0; fi
-          curl -s -X POST "https://hangar.papermc.io/api/v1/projects/FragMC/IcedSpear/versions" -H "Authorization: $JWT" -F "channel=$CHANNEL" -F "version=$VERSION" -F "changelog=@/tmp/changelog.txt" -F "files=@IcedSpear/target/icedspear-$VERSION.jar;type=application/java-archive" -F "platform=PAPER" -F "platformVersions=[\"26.2\"]" || echo "Hangar publish failed or version exists for IcedSpear (ignoring)"
+          curl -s -X POST "https://hangar.papermc.io/api/v1/projects/FragMC/IcedSpear/versions" -H "Authorization: $JWT" -F "channel=$CHANNEL" -F "version=$VERSION" -F "changelog=@/tmp/changelog.txt" -F "files=@IcedSpear/target/icedspear-$VERSION.jar;type=application/java-archive" -F "platform=PAPER" -F "platformVersions=[\"26.2\"]" || echo "Hangar publish failed for IcedSpear (ignoring)"
 
   build-editor:
     runs-on: ubuntu-latest
@@ -109,6 +115,11 @@ jobs:
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout -f Addons/Editor/pom.xml)
           if [[ "$VERSION" == *"-alpha"* ]]; then CHANNEL=Alpha; elif [[ "$VERSION" == *"-beta"* ]]; then CHANNEL=Beta; else CHANNEL=Release; fi
           echo "Publishing Editor $VERSION to Hangar FragMC/Editor channel $CHANNEL"
+          JWT_CHECK=$(curl -s -X POST "https://hangar.papermc.io/api/v1/authenticate?apiKey=$HANGAR_API_TOKEN" | grep -o '"token":"[^"]*' | cut -d'"' -f4)
+          if [ -n "$JWT_CHECK" ]; then
+            EXISTS=$(curl -s -H "Authorization: $JWT_CHECK" "https://hangar.papermc.io/api/v1/projects/FragMC/Editor/versions/$VERSION" | grep -o '"version":"[^"]*"' || true)
+            if [ -n "$EXISTS" ]; then echo "Version $VERSION already exists on Hangar FragMC/Editor, skipping"; exit 0; fi
+          fi
           COMMIT_DESC=$(git log -1 --pretty=%B)
           echo "$COMMIT_DESC" > /tmp/changelog.txt
           JWT=$(curl -s -X POST "https://hangar.papermc.io/api/v1/authenticate?apiKey=$HANGAR_API_TOKEN" | grep -o '"token":"[^"]*' | cut -d'"' -f4)
@@ -161,6 +172,11 @@ jobs:
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout -f Addons/Blocks/pom.xml)
           if [[ "$VERSION" == *"-alpha"* ]]; then CHANNEL=Alpha; elif [[ "$VERSION" == *"-beta"* ]]; then CHANNEL=Beta; else CHANNEL=Release; fi
           echo "Publishing Blocks $VERSION to Hangar FragMC/Blocks channel $CHANNEL"
+          JWT_CHECK=$(curl -s -X POST "https://hangar.papermc.io/api/v1/authenticate?apiKey=$HANGAR_API_TOKEN" | grep -o '"token":"[^"]*' | cut -d'"' -f4)
+          if [ -n "$JWT_CHECK" ]; then
+            EXISTS=$(curl -s -H "Authorization: $JWT_CHECK" "https://hangar.papermc.io/api/v1/projects/FragMC/Blocks/versions/$VERSION" | grep -o '"version":"[^"]*"' || true)
+            if [ -n "$EXISTS" ]; then echo "Version $VERSION already exists on Hangar FragMC/Blocks, skipping"; exit 0; fi
+          fi
           COMMIT_DESC=$(git log -1 --pretty=%B)
           echo "$COMMIT_DESC" > /tmp/changelog.txt
           JWT=$(curl -s -X POST "https://hangar.papermc.io/api/v1/authenticate?apiKey=$HANGAR_API_TOKEN" | grep -o '"token":"[^"]*' | cut -d'"' -f4)
@@ -250,6 +266,11 @@ jobs:
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout -f Addons/Weblink/pom.xml)
           if [[ "$VERSION" == *"-alpha"* ]]; then CHANNEL=Alpha; elif [[ "$VERSION" == *"-beta"* ]]; then CHANNEL=Beta; else CHANNEL=Release; fi
           echo "Publishing WebLink $VERSION to Hangar FragMC/WebLink channel $CHANNEL"
+          JWT_CHECK=$(curl -s -X POST "https://hangar.papermc.io/api/v1/authenticate?apiKey=$HANGAR_API_TOKEN" | grep -o '"token":"[^"]*' | cut -d'"' -f4)
+          if [ -n "$JWT_CHECK" ]; then
+            EXISTS=$(curl -s -H "Authorization: $JWT_CHECK" "https://hangar.papermc.io/api/v1/projects/FragMC/WebLink/versions/$VERSION" | grep -o '"version":"[^"]*"' || true)
+            if [ -n "$EXISTS" ]; then echo "Version $VERSION already exists on Hangar FragMC/WebLink, skipping"; exit 0; fi
+          fi
           COMMIT_DESC=$(git log -1 --pretty=%B)
           echo "$COMMIT_DESC" > /tmp/changelog.txt
           JWT=$(curl -s -X POST "https://hangar.papermc.io/api/v1/authenticate?apiKey=$HANGAR_API_TOKEN" | grep -o '"token":"[^"]*' | cut -d'"' -f4)
