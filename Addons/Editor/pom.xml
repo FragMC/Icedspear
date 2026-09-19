@@ -6,7 +6,7 @@
 
     <groupId>com.stufy.fragmc</groupId>
     <artifactId>editor-addon</artifactId>
-    <version>2.0.10-alpha</version>
+    <version>2.0.11-alpha</version>
     <packaging>jar</packaging>
 
     <name>EditorAddon</name>
@@ -58,7 +58,7 @@
         <dependency>
             <groupId>com.stufy.fragmc</groupId>
             <artifactId>icedspear</artifactId>
-            <version>2.0.10-alpha</version>
+            <version>2.0.11-alpha</version>
             <scope>provided</scope>
         </dependency>
         <!-- FAWE - provided -->
